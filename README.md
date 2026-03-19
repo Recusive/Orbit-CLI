@@ -180,9 +180,9 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## License
 
-This project is based on [OpenAI Codex CLI](https://github.com/openai/codex), licensed under the [Apache License 2.0](LICENSE).
+Copyright (c) 2025 Recursive Labs. All rights reserved.
 
-Modifications and additions by [Recursive Labs](https://orbit.build) are also licensed under Apache 2.0.
+This software is proprietary. See [LICENSE](LICENSE) for details.
 
 ---
 
