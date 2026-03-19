@@ -1,60 +1,189 @@
-<p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
 <p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
+  <strong>Orbit CLI</strong>
 </p>
-</br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you want the desktop app experience, run <code>codex app</code> or visit <a href="https://chatgpt.com/codex?app-landing-page=true">the Codex App page</a>.
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
+
+<h1 align="center">Orbit CLI</h1>
+
+<p align="center">
+  <strong>The terminal agent for Orbit.</strong><br/>
+  AI-powered coding agent that runs locally in your terminal. Built on the Ratatui TUI framework with a pluggable backend architecture.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Recusive/Orbit-CLI"><img src="https://img.shields.io/badge/Orbit_CLI-Terminal_Agent-24C8D8" alt="Orbit CLI" /></a>
+  <img src="https://img.shields.io/badge/Rust-1.85-DEA584?logo=rust&logoColor=black" alt="Rust" />
+  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white" alt="macOS" />
+  <img src="https://img.shields.io/badge/Linux-x86__64%20%7C%20arm64-FCC624?logo=linux&logoColor=black" alt="Linux" />
+</p>
 
 ---
 
-## Quickstart
+## What is Orbit CLI
 
-### Installing and running Codex CLI
+Orbit CLI is the terminal-based coding agent for the [Orbit](https://github.com/Recusive/Orbit) ecosystem. It provides a rich TUI (terminal user interface) for interacting with AI agents directly from your terminal — no IDE required.
 
-Install globally with your preferred package manager:
+Orbit CLI is the command-line counterpart to [Orbit Desktop](https://github.com/Recusive/Orbit), the AI-native development environment. While Orbit Desktop provides a full GUI with editor, browser, and terminal surfaces, Orbit CLI brings the same agent capabilities to developers who prefer working in the terminal.
 
-```shell
-# Install using npm
-npm install -g @openai/codex
+---
+
+## Features
+
+- **Rich Terminal UI** — Built with Ratatui for a polished, responsive terminal experience
+- **AI Agent Integration** — Conversational coding agent with tool execution
+- **Sandboxed Execution** — Commands run in platform-specific sandboxes (Seatbelt on macOS, Landlock/seccomp on Linux)
+- **MCP Support** — Model Context Protocol server for IDE integrations
+- **App Server** — JSON-RPC WebSocket server for programmatic access
+- **Skills System** — Extensible skill framework for custom agent behaviors
+- **Session Management** — Persistent sessions with conversation history
+- **File Operations** — Read, write, search, and patch files
+- **Git Integration** — Built-in git operations and diff handling
+- **Hooks System** — Lifecycle hooks for customizing agent behavior
+- **Multi-Agent** — Spawn and manage multiple agent instances
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Orbit CLI                         │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  codex-rs/tui        Terminal UI (Ratatui)          │
+│  codex-rs/core       Agent engine & tool execution  │
+│  codex-rs/protocol   Message types & prompts        │
+│  codex-rs/cli        Binary entry point & dispatch  │
+│                                                     │
+│  codex-rs/app-server      JSON-RPC WebSocket API    │
+│  codex-rs/mcp-server      MCP protocol server       │
+│  codex-rs/exec-server     Headless execution server │
+│                                                     │
+│  codex-rs/exec            Sandboxed execution       │
+│  codex-rs/linux-sandbox   Linux sandbox (Landlock)  │
+│  codex-rs/windows-sandbox Windows sandbox            │
+│                                                     │
+│  sdk/python          Python SDK                     │
+│  sdk/typescript      TypeScript SDK                 │
+│  shell-tool-mcp/     Shell tool MCP server          │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
-```shell
-# Install using Homebrew
-brew install --cask codex
+---
+
+## Development
+
+### Prerequisites
+
+- Rust 1.85+
+- Node.js 22+
+- pnpm 10+
+- `just` command runner
+- `cargo-nextest` (recommended for faster tests)
+
+### Quick Start
+
+```bash
+# Clone
+git clone https://github.com/Recusive/Orbit-CLI.git
+cd Orbit-CLI
+
+# Install Rust dependencies
+cd codex-rs && cargo fetch
+
+# Run from source
+just codex
+
+# Run tests
+just test
+
+# Format code
+just fmt
+
+# Lint
+just fix
 ```
 
-Then simply run `codex` to get started.
+### Key Commands
 
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
+| Command | Description |
+|---------|-------------|
+| `just codex` | Run Orbit CLI from source |
+| `just test` | Run all Rust tests |
+| `just fmt` | Format Rust code |
+| `just fix` | Run clippy fixes |
+| `just codex exec` | Run in headless/exec mode |
+| `just mcp-server-run` | Run the MCP server |
+| `just write-config-schema` | Regenerate config JSON schema |
 
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
+---
 
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
+## Repository Structure
 
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
+```
+Orbit-CLI/
+├── codex-rs/              # Primary Rust codebase
+│   ├── cli/               # Main binary entry point
+│   ├── core/              # Agent engine, tools, config
+│   ├── tui/               # Terminal UI (Ratatui)
+│   ├── tui_app_server/    # TUI with app-server backend
+│   ├── protocol/          # Message types and prompts
+│   ├── app-server/        # JSON-RPC WebSocket API
+│   ├── mcp-server/        # MCP protocol server
+│   ├── exec/              # Headless execution
+│   ├── exec-server/       # Execution server
+│   ├── hooks/             # Lifecycle hook system
+│   ├── skills/            # Skills framework
+│   ├── state/             # SQLite session persistence
+│   ├── config/            # TOML config system
+│   ├── login/             # OAuth authentication
+│   ├── utils/             # 19 utility crates
+│   └── ...                # 50+ total crates
+├── sdk/                   # Client SDKs
+│   ├── python/            # Python SDK
+│   └── typescript/        # TypeScript SDK
+├── shell-tool-mcp/        # Shell tool MCP server
+├── codex-cli/             # npm package wrapper
+├── docs/                  # Documentation
+├── scripts/               # Build & install scripts
+└── tools/                 # Developer tooling
+```
 
-</details>
+---
 
-### Using Codex with your ChatGPT plan
+## Ecosystem
 
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Team, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
+| Project | Description |
+|---------|-------------|
+| [**Orbit**](https://github.com/Recusive/Orbit) | AI-native desktop IDE (Tauri + React) |
+| **Orbit CLI** (this repo) | Terminal-based coding agent |
 
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
+Orbit CLI shares the agent engine with Orbit Desktop — the same AI capabilities, different interface.
 
-## Docs
+---
 
-- [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Contributing**](./docs/contributing.md)
-- [**Installing & building**](./docs/install.md)
-- [**Open source fund**](./docs/open-source-fund.md)
+## Contributing
 
-This repository is licensed under the [Apache-2.0 License](LICENSE).
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `just fmt` and `just fix` in `codex-rs/`
+5. Run `just test` to verify
+6. Submit a pull request
+
+---
+
+## License
+
+This project is based on [OpenAI Codex CLI](https://github.com/openai/codex), licensed under the [Apache License 2.0](LICENSE).
+
+Modifications and additions by [Recursive Labs](https://orbit.build) are also licensed under Apache 2.0.
+
+---
+
+Built by [Recursive Labs](https://orbit.build)

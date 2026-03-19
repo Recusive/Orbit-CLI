@@ -1,13 +1,31 @@
 # Security Policy
 
-Thank you for helping us keep Codex secure!
-
 ## Reporting Security Issues
 
-The security is essential to OpenAI's mission. We appreciate the work of security researchers acting in good faith to identify and responsibly report potential vulnerabilities, helping us maintain strong privacy and security standards for our users and technology.
+If you discover a security vulnerability in Orbit CLI, please report it responsibly.
 
-Our security program is managed through Bugcrowd, and we ask that any validated vulnerabilities be reported via the [Bugcrowd program](https://bugcrowd.com/engagements/openai).
+**Email:** security@orbit.build
 
-## Vulnerability Disclosure Program
+Please include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
 
-Our Vulnerability Program Guidelines are defined on our [Bugcrowd program page](https://bugcrowd.com/engagements/openai).
+We will acknowledge receipt within 48 hours and provide a detailed response within 7 days.
+
+## Scope
+
+Security issues in the following areas are in scope:
+- Sandbox escapes (Seatbelt, Landlock, seccomp)
+- Command injection vulnerabilities
+- Authentication/credential handling
+- File system access violations
+- Network policy bypasses
+
+## Responsible Disclosure
+
+We ask that you:
+- Give us reasonable time to fix the issue before public disclosure
+- Do not access or modify other users' data
+- Act in good faith
