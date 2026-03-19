@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>Orbit CLI</strong>
+  <img src="orbit-icon.png" alt="Orbit" width="128" />
 </p>
 
 <h1 align="center">Orbit CLI</h1>
@@ -19,11 +19,30 @@
 
 ---
 
+## About
+
+Orbit CLI is the terminal-based coding agent for the [Orbit](https://github.com/Recusive/Orbit) ecosystem — built by [Recursive Labs](https://orbit.build).
+
+Orbit is an AI-native development environment where one AI agent works across every surface you build with. Orbit CLI brings that same agent to your terminal for developers who live in the command line.
+
+**Orbit Desktop** gives you the full GUI — editor, browser, terminal, vault — all with an embedded AI agent that sees everything.
+**Orbit CLI** gives you the same agent capabilities in a rich terminal UI, no IDE required.
+
+Both share the same core engine. One agent, two interfaces, zero context switching.
+
+---
+
 ## What is Orbit CLI
 
-Orbit CLI is the terminal-based coding agent for the [Orbit](https://github.com/Recusive/Orbit) ecosystem. It provides a rich TUI (terminal user interface) for interacting with AI agents directly from your terminal — no IDE required.
+Orbit CLI is a local coding agent that runs in your terminal. It can:
 
-Orbit CLI is the command-line counterpart to [Orbit Desktop](https://github.com/Recusive/Orbit), the AI-native development environment. While Orbit Desktop provides a full GUI with editor, browser, and terminal surfaces, Orbit CLI brings the same agent capabilities to developers who prefer working in the terminal.
+- **Write and edit code** — understands your codebase, makes targeted changes
+- **Execute commands** — runs shell commands in a sandboxed environment
+- **Search and navigate** — finds files, functions, and patterns across your project
+- **Manage git** — staging, commits, diffs, branches
+- **Use tools** — extensible tool system for file ops, patches, and more
+- **Run as a server** — JSON-RPC WebSocket API for IDE integrations
+- **Expose MCP** — Model Context Protocol server for tool sharing
 
 ---
 
@@ -40,6 +59,7 @@ Orbit CLI is the command-line counterpart to [Orbit Desktop](https://github.com/
 - **Git Integration** — Built-in git operations and diff handling
 - **Hooks System** — Lifecycle hooks for customizing agent behavior
 - **Multi-Agent** — Spawn and manage multiple agent instances
+- **Python & TypeScript SDKs** — Programmatic access from your language of choice
 
 ---
 
@@ -159,22 +179,11 @@ Orbit-CLI/
 | [**Orbit**](https://github.com/Recusive/Orbit) | AI-native desktop IDE (Tauri + React) |
 | **Orbit CLI** (this repo) | Terminal-based coding agent |
 
-Orbit CLI shares the agent engine with Orbit Desktop — the same AI capabilities, different interface.
-
 ---
 
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `just fmt` and `just fix` in `codex-rs/`
-5. Run `just test` to verify
-6. Submit a pull request
 
 ---
 
@@ -186,4 +195,4 @@ This software is proprietary. See [LICENSE](LICENSE) for details.
 
 ---
 
-Built by [Recursive Labs](https://orbit.build)
+<p align="center">Built by <a href="https://orbit.build">Recursive Labs</a></p>
