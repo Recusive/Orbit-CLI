@@ -16,7 +16,7 @@ The migration is split into 8 stages. Each stage produces a working, testable co
 
 | Stage | Name | Status | Description |
 |-------|------|--------|-------------|
-| **1** | [Rename](./01-rename-codex-to-orbit-code.md) | **IN PROGRESS** | Rebrand codex → orbit-code (crate names, imports, binary, config paths, npm/Python packages) |
+| **1** | [Rename](./01-rename-codex-to-orbit-code.md) | **COMPLETE** | Rebrand codex → orbit-code (crate names, imports, binary, config paths, npm/Python packages) |
 | **2** | [Remove Dead Crates](./02-remove-dead-crates.md) | PLANNED | Strip OpenAI-only crates (chatgpt, backend-client, cloud-tasks, connectors, responses-api-proxy) |
 | **3** | [Multi-Provider Client Layer](./03-multi-provider-clients.md) | PLANNED | Build 3 new Rust HTTP clients: Chat Completions, Anthropic Messages, Google GenerateContent |
 | **4** | [Provider Registry](./04-provider-registry.md) | PLANNED | Port provider configs, model definitions, and capabilities from Agent-backend TypeScript to Rust |

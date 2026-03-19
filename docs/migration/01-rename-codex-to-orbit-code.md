@@ -1,6 +1,6 @@
 # Stage 1: Rename codex → orbit-code
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 
 **Full plan:** [01-rename-codex-to-orbit-code-full-plan.md](./01-rename-codex-to-orbit-code-full-plan.md) (also at `docs/orbit/plans/rename-codex-to-orbit-code.md`)
 
