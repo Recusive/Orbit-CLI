@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Orbit CLI will be documented here.
+All notable changes to Orbit Code will be documented here.
 
 ## [Unreleased]
 
@@ -18,6 +18,6 @@ All notable changes to Orbit CLI will be documented here.
 - OpenAI Codex skills
 
 ### Changed
-- README rewritten for Orbit CLI
+- README rewritten for Orbit Code
 - NOTICE updated with Orbit attribution
 - SECURITY.md updated with Orbit contacts

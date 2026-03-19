@@ -1,11 +1,11 @@
-# Contributing to Orbit CLI
+# Contributing to Orbit Code
 
-Thank you for your interest in contributing to Orbit CLI!
+Thank you for your interest in contributing to Orbit Code!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/Orbit-CLI.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/Orbit-Code.git`
 3. Install prerequisites:
    - Rust 1.85+
    - Node.js 22+
@@ -66,7 +66,7 @@ cargo insta accept -p codex-tui
 
 ## Reporting Issues
 
-Open an issue at [github.com/Recusive/Orbit-CLI/issues](https://github.com/Recusive/Orbit-CLI/issues).
+Open an issue at [github.com/Recusive/Orbit-Code/issues](https://github.com/Recusive/Orbit-Code/issues).
 
 Include:
 - Steps to reproduce

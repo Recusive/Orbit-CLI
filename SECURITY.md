@@ -2,7 +2,7 @@
 
 ## Reporting Security Issues
 
-If you discover a security vulnerability in Orbit CLI, please report it responsibly.
+If you discover a security vulnerability in Orbit Code, please report it responsibly.
 
 **Email:** security@orbit.build
 

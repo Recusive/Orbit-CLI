@@ -1,10 +1,10 @@
-# Orbit CLI — Monorepo Root
+# Orbit Code — Monorepo Root
 
 ## What This Is
-Orbit CLI is the terminal-based coding agent for the Orbit ecosystem. It provides a rich TUI for interacting with AI agents directly from the terminal. This is a fork of OpenAI's Codex CLI, rebuilt to connect to the Orbit backend.
+Orbit Code is the terminal-based coding agent for the Orbit ecosystem. It provides a rich TUI for interacting with AI agents directly from the terminal. This is a fork of OpenAI's Codex CLI, rebuilt to connect to the Orbit backend.
 
 **Parent project:** [Orbit](https://github.com/Recusive/Orbit) — AI-native desktop IDE
-**This repo:** [Orbit CLI](https://github.com/Recusive/Orbit-CLI) — Terminal agent
+**This repo:** [Orbit Code](https://github.com/Recusive/Orbit-Code) — Terminal agent
 
 ## Repository Structure
 
@@ -39,7 +39,7 @@ Orbit CLI is the terminal-based coding agent for the Orbit ecosystem. It provide
 
 ## Common Commands
 ```bash
-just codex          # Run Orbit CLI from source
+just codex          # Run Orbit Code from source
 just test           # Run Rust tests (nextest)
 just fmt            # Format Rust code
 just fix            # Run clippy fixes
@@ -48,7 +48,7 @@ just write-app-server-schema # Regenerate app-server protocol schemas
 ```
 
 ## Architecture Overview
-The Orbit CLI is primarily a **Rust application** (`codex-rs/`) that:
+Orbit Code is primarily a **Rust application** (`codex-rs/`) that:
 1. Provides a terminal UI (TUI) built with `ratatui`
 2. Connects to a backend API for AI model access
 3. Executes tools (shell commands, file operations) in sandboxed environments
@@ -57,6 +57,6 @@ The Orbit CLI is primarily a **Rust application** (`codex-rs/`) that:
 6. Provides an MCP server for Model Context Protocol integrations
 
 ## Orbit Ecosystem Context
-- **Orbit Desktop** (separate repo) = Full GUI IDE with editor, browser, terminal, vault
-- **Orbit CLI** (this repo) = Terminal-only agent with the same core engine
+- **Orbit** (Desktop) = Full GUI IDE with editor, browser, terminal, vault
+- **Orbit Code** (Terminal) = Terminal-only agent with the same core engine
 - Both share the AI agent architecture; this repo provides the TUI + backend integration layer

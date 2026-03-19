@@ -2,7 +2,7 @@
   <img src="orbit-icon.png" alt="Orbit" width="128" />
 </p>
 
-<h1 align="center">Orbit CLI</h1>
+<h1 align="center">Orbit Code</h1>
 
 <p align="center">
   <strong>The terminal agent for Orbit.</strong><br/>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Recusive/Orbit-CLI"><img src="https://img.shields.io/badge/Orbit_CLI-Terminal_Agent-24C8D8" alt="Orbit CLI" /></a>
+  <a href="https://github.com/Recusive/Orbit-Code"><img src="https://img.shields.io/badge/Orbit_Code-Terminal_Agent-24C8D8" alt="Orbit Code" /></a>
   <img src="https://img.shields.io/badge/Rust-1.85-DEA584?logo=rust&logoColor=black" alt="Rust" />
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white" alt="macOS" />
@@ -21,20 +21,20 @@
 
 ## About
 
-Orbit CLI is the terminal-based coding agent for the [Orbit](https://github.com/Recusive/Orbit) ecosystem — built by [Recursive Labs](https://orbit.build).
+Orbit Code is the terminal-based coding agent for the [Orbit](https://github.com/Recusive/Orbit) ecosystem — built by [Recursive Labs](https://orbit.build).
 
-Orbit is an AI-native development environment where one AI agent works across every surface you build with. Orbit CLI brings that same agent to your terminal for developers who live in the command line.
+Orbit is an AI-native development environment where one AI agent works across every surface you build with. Orbit Code brings that same agent to your terminal for developers who live in the command line.
 
-**Orbit Desktop** gives you the full GUI — editor, browser, terminal, vault — all with an embedded AI agent that sees everything.
-**Orbit CLI** gives you the same agent capabilities in a rich terminal UI, no IDE required.
+**Orbit** (Desktop) gives you the full GUI — editor, browser, terminal, vault — all with an embedded AI agent that sees everything.
+**Orbit Code** (Terminal) gives you the same agent capabilities in a rich terminal UI, no IDE required.
 
 Both share the same core engine. One agent, two interfaces, zero context switching.
 
 ---
 
-## What is Orbit CLI
+## What is Orbit Code
 
-Orbit CLI is a local coding agent that runs in your terminal. It can:
+Orbit Code is a local coding agent that runs in your terminal. It can:
 
 - **Write and edit code** — understands your codebase, makes targeted changes
 - **Execute commands** — runs shell commands in a sandboxed environment
@@ -67,7 +67,7 @@ Orbit CLI is a local coding agent that runs in your terminal. It can:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Orbit CLI                         │
+│                    Orbit Code                         │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
 │  codex-rs/tui        Terminal UI (Ratatui)          │
@@ -106,8 +106,8 @@ Orbit CLI is a local coding agent that runs in your terminal. It can:
 
 ```bash
 # Clone
-git clone https://github.com/Recusive/Orbit-CLI.git
-cd Orbit-CLI
+git clone https://github.com/Recusive/Orbit-Code.git
+cd Orbit-Code
 
 # Install Rust dependencies
 cd codex-rs && cargo fetch
@@ -129,7 +129,7 @@ just fix
 
 | Command | Description |
 |---------|-------------|
-| `just codex` | Run Orbit CLI from source |
+| `just codex` | Run Orbit Code from source |
 | `just test` | Run all Rust tests |
 | `just fmt` | Format Rust code |
 | `just fix` | Run clippy fixes |
@@ -142,7 +142,7 @@ just fix
 ## Repository Structure
 
 ```
-Orbit-CLI/
+Orbit-Code/
 ├── codex-rs/              # Primary Rust codebase
 │   ├── cli/               # Main binary entry point
 │   ├── core/              # Agent engine, tools, config
@@ -177,7 +177,7 @@ Orbit-CLI/
 | Project | Description |
 |---------|-------------|
 | [**Orbit**](https://github.com/Recusive/Orbit) | AI-native desktop IDE (Tauri + React) |
-| **Orbit CLI** (this repo) | Terminal-based coding agent |
+| **Orbit Code** (this repo) | Terminal-based coding agent |
 
 ---
 
