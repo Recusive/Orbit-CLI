@@ -238,21 +238,17 @@ impl StatusHistoryCell {
         let session_id = session_id.as_ref().map(std::string::ToString::to_string);
         let forked_from = forked_from.map(|id| id.to_string());
         let default_usage = TokenUsage::default();
-        let (context_usage, context_window) = match token_info {
+        let (context_usage, raw_context_window) = match token_info {
             Some(info) => (&info.last_token_usage, info.model_context_window),
-            None => {
-                // Before the first turn, cap the config's context window to the
-                // model's actual limit so a global override (e.g. 1M for GPT)
-                // doesn't inflate the display for smaller models (e.g. 200K Haiku).
-                let model_max = anthropic_model_context_window(&model_name);
-                let capped = match (config.model_context_window, model_max) {
-                    (Some(cfg_val), Some(max_val)) => Some(cfg_val.min(max_val)),
-                    (Some(cfg_val), None) => Some(cfg_val),
-                    (None, Some(max_val)) => Some(max_val),
-                    (None, None) => None,
-                };
-                (&default_usage, capped)
-            }
+            None => (&default_usage, config.model_context_window),
+        };
+        // Always resolve context window from the current model name so
+        // mid-session model switches show the correct value.
+        let model_max = anthropic_model_context_window(&model_name);
+        let context_window = match (raw_context_window, model_max) {
+            (Some(raw), Some(max_val)) => Some(raw.min(max_val)),
+            (None, Some(max_val)) => Some(max_val),
+            (val, None) => val,
         };
         let context_window = context_window.map(|window| StatusContextWindowData {
             percent_remaining: context_usage.percent_of_context_window_remaining(window),
