@@ -442,7 +442,7 @@ where
                     } // match block
                 }
                 Ok(AnthropicEvent::ContentBlockDelta { index, delta }) => match delta {
-                    orbit_code_anthropic::DeltaType::TextDelta { text } => {
+                    orbit_code_anthropic::DeltaType::Text { text } => {
                         if let Some(ActiveBlock::Text { text: accumulator }) =
                             active_blocks.get_mut(&index)
                         {
@@ -456,14 +456,14 @@ where
                             return;
                         }
                     }
-                    orbit_code_anthropic::DeltaType::InputJsonDelta { partial_json } => {
+                    orbit_code_anthropic::DeltaType::InputJson { partial_json } => {
                         if let Some(ActiveBlock::ToolUse { arguments, .. }) =
                             active_blocks.get_mut(&index)
                         {
                             arguments.push_str(&partial_json);
                         }
                     }
-                    orbit_code_anthropic::DeltaType::ThinkingDelta { thinking } => {
+                    orbit_code_anthropic::DeltaType::Thinking { thinking } => {
                         if tx_event
                             .send(Ok(ResponseEvent::ReasoningContentDelta {
                                 delta: thinking,
@@ -475,7 +475,7 @@ where
                             return;
                         }
                     }
-                    orbit_code_anthropic::DeltaType::SignatureDelta { .. } => {
+                    orbit_code_anthropic::DeltaType::Signature { .. } => {
                         // Thinking block signature — not needed for event mapping.
                     }
                 },
@@ -847,7 +847,7 @@ mod tests {
             }),
             Ok(AnthropicEvent::ContentBlockDelta {
                 index: 0,
-                delta: DeltaType::ThinkingDelta {
+                delta: DeltaType::Thinking {
                     thinking: "reasoning".to_string(),
                 },
             }),
@@ -860,7 +860,7 @@ mod tests {
             }),
             Ok(AnthropicEvent::ContentBlockDelta {
                 index: 1,
-                delta: DeltaType::TextDelta {
+                delta: DeltaType::Text {
                     text: "hello".to_string(),
                 },
             }),
@@ -874,7 +874,7 @@ mod tests {
             }),
             Ok(AnthropicEvent::ContentBlockDelta {
                 index: 2,
-                delta: DeltaType::InputJsonDelta {
+                delta: DeltaType::InputJson {
                     partial_json: "{\"command\":\"pwd\"}".to_string(),
                 },
             }),

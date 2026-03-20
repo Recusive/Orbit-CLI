@@ -1305,7 +1305,13 @@ impl ModelClientSession {
         service_tier: Option<ServiceTier>,
         turn_metadata_header: Option<&str>,
     ) -> Result<ResponseStream> {
-        let wire_api = self.client.state.provider.wire_api;
+        // Dynamically resolve wire_api from the model slug so mid-session
+        // model switches between Claude and GPT work without restarting.
+        let wire_api = if crate::anthropic_bridge::is_known_anthropic_model(&model_info.slug) {
+            WireApi::AnthropicMessages
+        } else {
+            WireApi::Responses
+        };
         match wire_api {
             WireApi::Responses => {
                 if self.client.responses_websocket_enabled() {
@@ -1394,7 +1400,14 @@ impl ModelClientSession {
 
         let defaults = anthropic_model_defaults(&model_info.slug, effort)?;
         let request = build_messages_request(prompt, &model_info.slug, &defaults)?;
-        let provider = &self.client.state.provider;
+        // Use the Anthropic provider directly rather than the session's stored
+        // provider, which may be OpenAI if the user switched models mid-session.
+        let anthropic_provider = ModelProviderInfo::create_anthropic_provider();
+        let provider = if self.client.state.provider.wire_api == WireApi::AnthropicMessages {
+            &self.client.state.provider
+        } else {
+            &anthropic_provider
+        };
         let mut extra_headers = provider.build_header_map()?;
         let api_key = extra_headers
             .get("x-api-key")

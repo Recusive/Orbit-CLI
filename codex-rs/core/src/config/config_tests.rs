@@ -1752,7 +1752,7 @@ fn anthropic_provider_requires_explicit_model() -> std::io::Result<()> {
 }
 
 #[test]
-fn claude_model_requires_anthropic_provider() -> std::io::Result<()> {
+fn claude_model_auto_routes_to_anthropic_provider() -> std::io::Result<()> {
     let orbit_code_home = TempDir::new()?;
     let cfg = ConfigToml {
         model_provider: Some(crate::OPENAI_PROVIDER_ID.to_string()),
@@ -1760,18 +1760,19 @@ fn claude_model_requires_anthropic_provider() -> std::io::Result<()> {
         ..Default::default()
     };
 
+    // Auto-routing overrides the explicit "openai" provider to "anthropic"
+    // when a Claude model is selected.
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
         orbit_code_home.path().to_path_buf(),
     );
-    assert!(result.is_err());
-    let error = result.expect_err("provider mismatch should fail");
-    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
-    assert_eq!(
-        error.to_string(),
-        crate::anthropic_bridge::CLAUDE_PROVIDER_MISMATCH_ERROR
+    assert!(
+        result.is_ok(),
+        "Claude model should auto-route to Anthropic provider"
     );
+    let config = result.unwrap();
+    assert_eq!(config.model_provider_id, crate::ANTHROPIC_PROVIDER_ID);
 
     Ok(())
 }

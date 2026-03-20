@@ -53,21 +53,12 @@ pub enum ContentBlockType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::enum_variant_names)]
 pub enum DeltaType {
-    TextDelta {
-        text: String,
-    },
-    InputJsonDelta {
-        partial_json: String,
-    },
-    ThinkingDelta {
-        thinking: String,
-    },
+    Text { text: String },
+    InputJson { partial_json: String },
+    Thinking { thinking: String },
     /// Signature for thinking block verification. Ignored by the bridge.
-    SignatureDelta {
-        signature: String,
-    },
+    Signature { signature: String },
 }
 
 pub fn parse_sse_event(
@@ -177,10 +168,10 @@ enum RawDeltaType {
 impl RawDeltaType {
     fn into_delta_type(self) -> Result<DeltaType, AnthropicError> {
         Ok(match self {
-            Self::TextDelta { text } => DeltaType::TextDelta { text },
-            Self::InputJsonDelta { partial_json } => DeltaType::InputJsonDelta { partial_json },
-            Self::ThinkingDelta { thinking } => DeltaType::ThinkingDelta { thinking },
-            Self::SignatureDelta { signature } => DeltaType::SignatureDelta { signature },
+            Self::TextDelta { text } => DeltaType::Text { text },
+            Self::InputJsonDelta { partial_json } => DeltaType::InputJson { partial_json },
+            Self::ThinkingDelta { thinking } => DeltaType::Thinking { thinking },
+            Self::SignatureDelta { signature } => DeltaType::Signature { signature },
         })
     }
 }
@@ -256,7 +247,7 @@ mod tests {
             event,
             AnthropicEvent::ContentBlockDelta {
                 index: 1,
-                delta: DeltaType::InputJsonDelta {
+                delta: DeltaType::InputJson {
                     partial_json: "{\"foo\":\"bar\"}".to_string(),
                 },
             }

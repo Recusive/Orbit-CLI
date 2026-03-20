@@ -378,7 +378,7 @@ mod tests {
             first,
             AnthropicEvent::ContentBlockDelta {
                 index: 0,
-                delta: DeltaType::TextDelta {
+                delta: DeltaType::Text {
                     text: "hello".to_string(),
                 },
             }
