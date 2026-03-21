@@ -36,6 +36,7 @@ use crate::anthropic_bridge::is_known_anthropic_model;
 use crate::anthropic_bridge::map_anthropic_error;
 use crate::anthropic_bridge::map_anthropic_to_response_stream;
 use crate::anthropic_bridge::merge_anthropic_beta_headers;
+use crate::anthropic_bridge::prefix_tool_names_for_oauth;
 use crate::api_bridge::CoreAuthProvider;
 use crate::api_bridge::auth_provider_from_auth;
 use crate::api_bridge::map_api_error;
@@ -118,6 +119,7 @@ use crate::tools::spec::create_tools_json_for_responses_api;
 use crate::util::FeedbackRequestTags;
 use crate::util::emit_feedback_auth_recovery_tags;
 use crate::util::emit_feedback_request_tags_with_auth_env;
+use orbit_code_anthropic::AnthropicAuth;
 use orbit_code_anthropic::AnthropicClient;
 
 pub const OPENAI_BETA_HEADER: &str = "OpenAI-Beta";
@@ -532,21 +534,42 @@ impl ModelClient {
     ///
     /// This centralizes setup used by both prewarm and normal request paths so they stay in
     /// lockstep when auth/provider resolution changes.
-    async fn current_client_setup(&self) -> Result<CurrentClientSetup> {
+    ///
+    /// When `provider_override` is Some, it is used instead of the session's stored provider.
+    /// This supports mid-session model switches (e.g., Anthropic session → OpenAI model).
+    async fn current_client_setup_with_provider(
+        &self,
+        provider_override: Option<&ModelProviderInfo>,
+    ) -> Result<CurrentClientSetup> {
+        let provider = provider_override.unwrap_or(&self.state.provider);
+        // When overriding to a different provider, resolve auth for THAT provider
+        // instead of using the cached session auth (which belongs to the original provider).
         let auth = match self.state.auth_manager.as_ref() {
+            Some(manager) if provider_override.is_some() => {
+                use crate::auth::ProviderName;
+                // Derive provider name from the override's wire_api
+                let provider_name = if provider.wire_api == WireApi::AnthropicMessages {
+                    ProviderName::Anthropic
+                } else {
+                    ProviderName::OpenAI
+                };
+                manager.auth_cached_for_provider(provider_name)
+            }
             Some(manager) => manager.auth().await,
             None => None,
         };
-        let api_provider = self
-            .state
-            .provider
-            .to_api_provider(auth.as_ref().map(CodexAuth::auth_mode))?;
-        let api_auth = auth_provider_from_auth(auth.clone(), &self.state.provider)?;
+        let api_provider = provider.to_api_provider(auth.as_ref().map(CodexAuth::auth_mode))?;
+        let api_auth = auth_provider_from_auth(auth.clone(), provider)?;
         Ok(CurrentClientSetup {
             auth,
             api_provider,
             api_auth,
         })
+    }
+
+    async fn current_client_setup(&self) -> Result<CurrentClientSetup> {
+        self.current_client_setup_with_provider(/*override*/ None)
+            .await
     }
 
     /// Opens a websocket connection using the same header and telemetry wiring as normal turns.
@@ -1014,6 +1037,21 @@ impl ModelClientSession {
         service_tier: Option<ServiceTier>,
         turn_metadata_header: Option<&str>,
     ) -> Result<ResponseStream> {
+        // When the session started on Anthropic but the model is now OpenAI,
+        // use the default OpenAI provider for auth and base URL resolution.
+        let provider_override = if self.client.state.provider.wire_api == WireApi::AnthropicMessages
+        {
+            tracing::info!(
+                "stream_responses_api: overriding Anthropic provider with OpenAI for model {}",
+                model_info.slug
+            );
+            Some(ModelProviderInfo::create_openai_provider(
+                /*base_url*/ None,
+            ))
+        } else {
+            None
+        };
+
         if let Some(path) = &*ORBIT_RS_SSE_FIXTURE {
             warn!(path, "Streaming from fixture");
             let stream = orbit_code_api::stream_from_fixture(
@@ -1031,7 +1069,10 @@ impl ModelClientSession {
             .map(super::auth::AuthManager::unauthorized_recovery);
         let mut pending_retry = PendingUnauthorizedRetry::default();
         loop {
-            let client_setup = self.client.current_client_setup().await?;
+            let client_setup = self
+                .client
+                .current_client_setup_with_provider(provider_override.as_ref())
+                .await?;
             let transport = ReqwestTransport::new(build_reqwest_client());
             let request_auth_context = AuthRequestTelemetryContext::new(
                 client_setup.auth.as_ref().map(CodexAuth::auth_mode),
@@ -1251,6 +1292,10 @@ impl ModelClientSession {
         if !self.client.responses_websocket_enabled() {
             return Ok(());
         }
+        // Skip websocket prewarm for Anthropic models — they use SSE, not websockets.
+        if crate::anthropic_bridge::is_known_anthropic_model(&model_info.slug) {
+            return Ok(());
+        }
         if self.websocket_session.last_request.is_some() {
             return Ok(());
         }
@@ -1409,26 +1454,64 @@ impl ModelClientSession {
             &anthropic_provider
         };
         let mut extra_headers = provider.build_header_map()?;
-        let api_key = extra_headers
-            .get("x-api-key")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_string)
-            .or(provider.api_key()?)
-            .ok_or_else(|| {
-                CodexErr::EnvVar(EnvVarError {
-                    var: "ANTHROPIC_API_KEY".to_string(),
-                    instructions: provider.env_key_instructions.clone(),
-                })
-            })?;
+
+        // Proactive Anthropic OAuth refresh (async, before sync auth resolution)
+        if let Some(manager) = self.client.state.auth_manager.as_ref() {
+            manager.refresh_anthropic_oauth_if_needed().await;
+        }
+
+        // Resolve Anthropic auth: AuthManager (stored credentials) > provider
+        // headers > env var > experimental_bearer_token.
+        let anthropic_auth = self.resolve_anthropic_auth(provider, &extra_headers)?;
+        let is_oauth = matches!(anthropic_auth, AnthropicAuth::BearerToken(_));
+        tracing::info!(
+            is_oauth = is_oauth,
+            auth_type = if is_oauth { "bearer_oauth" } else { "api_key" },
+            "Anthropic auth resolved"
+        );
+
         let base_url = provider
             .base_url
             .clone()
             .unwrap_or_else(|| "https://api.anthropic.com".to_string());
+
         merge_anthropic_beta_headers(
             &mut extra_headers,
             &model_info.slug,
             &defaults.additional_beta_headers,
         )?;
+
+        // If OAuth mode, prefix tool names and prepend required system prompt
+        let mut request = request;
+        if is_oauth {
+            prefix_tool_names_for_oauth(&mut request);
+            // The OAuth endpoint requires "You are Claude Code..." as a separate
+            // first system block for access to premium models (opus-4-6, sonnet-4-6).
+            let prefix_block = orbit_code_anthropic::SystemBlock {
+                r#type: "text".to_string(),
+                text: "You are Claude Code, Anthropic's official CLI for Claude.".to_string(),
+                cache_control: None,
+            };
+            if let Some(system) = &mut request.system {
+                // Prepend as separate first block (must not be concatenated)
+                system.insert(0, prefix_block);
+            } else {
+                request.system = Some(vec![prefix_block]);
+            }
+        }
+
+        tracing::info!(
+            model = %request.model,
+            thinking = ?request.thinking,
+            beta_headers = ?extra_headers.get("anthropic-beta").map(|v| v.to_str().unwrap_or("?")),
+            max_tokens = request.max_tokens,
+            "Anthropic request details"
+        );
+
+        // Dump the full request body for debugging
+        if let Ok(json) = serde_json::to_string_pretty(&request) {
+            let _ = std::fs::write("/tmp/anthropic-request-body.json", &json);
+        }
 
         let client = AnthropicClient::new(
             build_reqwest_client(),
@@ -1436,10 +1519,65 @@ impl ModelClientSession {
             provider.stream_idle_timeout(),
         );
         let stream = client
-            .stream(request, api_key, extra_headers)
+            .stream(request, anthropic_auth, extra_headers)
             .await
             .map_err(map_anthropic_error)?;
-        Ok(map_anthropic_to_response_stream(stream))
+        Ok(map_anthropic_to_response_stream(stream, is_oauth))
+    }
+
+    /// Resolve Anthropic authentication from AuthManager, falling back to
+    /// provider config headers and env vars.
+    fn resolve_anthropic_auth(
+        &self,
+        provider: &ModelProviderInfo,
+        extra_headers: &ApiHeaderMap,
+    ) -> Result<AnthropicAuth> {
+        use crate::auth::ProviderName;
+
+        // 1. Check AuthManager for stored Anthropic credentials
+        if let Some(manager) = self.client.state.auth_manager.as_ref() {
+            let found = manager.auth_cached_for_provider(ProviderName::Anthropic);
+            tracing::info!(
+                found = found.is_some(),
+                auth_mode = ?found.as_ref().map(super::auth::CodexAuth::auth_mode),
+                "resolve_anthropic_auth: checking AuthManager"
+            );
+            if let Some(auth) = found {
+                match auth {
+                    CodexAuth::AnthropicOAuth(ref oauth) => {
+                        return Ok(AnthropicAuth::BearerToken(oauth.access_token().to_string()));
+                    }
+                    CodexAuth::AnthropicApiKey(ref api_key_auth) => {
+                        return Ok(AnthropicAuth::ApiKey(api_key_auth.api_key().to_string()));
+                    }
+                    _ => {
+                        tracing::warn!(auth_mode = ?auth.auth_mode(), "resolve_anthropic_auth: unexpected variant");
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("resolve_anthropic_auth: no AuthManager available");
+        }
+
+        // 2. Fall back to provider config headers or env var (existing 3a behavior)
+        if let Some(api_key) = extra_headers
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+            .or(provider.api_key()?)
+        {
+            return Ok(AnthropicAuth::ApiKey(api_key));
+        }
+
+        // 3. Check experimental bearer token
+        if let Some(bearer) = &provider.experimental_bearer_token {
+            return Ok(AnthropicAuth::BearerToken(bearer.clone()));
+        }
+
+        Err(CodexErr::EnvVar(EnvVarError {
+            var: "ANTHROPIC_API_KEY".to_string(),
+            instructions: provider.env_key_instructions.clone(),
+        }))
     }
 }
 
@@ -1619,6 +1757,8 @@ impl AuthRequestTelemetryContext {
             auth_mode: auth_mode.map(|mode| match mode {
                 AuthMode::ApiKey => "ApiKey",
                 AuthMode::Chatgpt => "Chatgpt",
+                AuthMode::AnthropicApiKey => "AnthropicApiKey",
+                AuthMode::AnthropicOAuth => "AnthropicOAuth",
             }),
             auth_header_attached: api_auth.auth_header_attached(),
             auth_header_name: api_auth.auth_header_name(),

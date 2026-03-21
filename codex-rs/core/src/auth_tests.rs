@@ -70,9 +70,11 @@ fn login_with_api_key_overwrites_existing_auth_json() {
         .expect("login_with_api_key should succeed");
 
     let storage = FileAuthStorage::new(dir.path().to_path_buf());
-    let auth = storage
-        .try_read_auth_json(&auth_path)
-        .expect("auth.json should parse");
+    let v2 = storage
+        .load()
+        .expect("auth.json should load")
+        .expect("auth.json should exist");
+    let auth = v2.to_v1_openai();
     assert_eq!(auth.openai_api_key.as_deref(), Some("sk-new"));
     assert!(auth.tokens.is_none(), "tokens should be cleared");
 }
@@ -117,9 +119,11 @@ async fn pro_account_with_no_api_key_uses_chatgpt_auth() {
         .last_refresh
         .expect("last_refresh should be recorded");
 
+    // After v1→v2→v1 roundtrip, the auth_mode is normalized to
+    // Some(Chatgpt) instead of None (v2 format always has explicit types).
     assert_eq!(
         AuthDotJson {
-            auth_mode: None,
+            auth_mode: Some(ApiAuthMode::Chatgpt),
             openai_api_key: None,
             tokens: Some(TokenData {
                 id_token: IdTokenInfo {
@@ -512,4 +516,86 @@ fn missing_plan_type_maps_to_unknown() {
     .expect("auth available");
 
     pretty_assertions::assert_eq!(auth.account_plan_type(), Some(AccountPlanType::Unknown));
+}
+
+#[test]
+fn auth_cached_for_provider_openai_does_not_return_anthropic() {
+    // When the only auth in storage is Anthropic OAuth, asking for OpenAI should return None.
+    let dir = tempdir().expect("failed to create tempdir");
+    let auth_path = dir.path().join("auth.json");
+    let v2 = json!({
+        "version": 2,
+        "providers": {
+            "anthropic": {
+                "type": "anthropic_oauth",
+                "access_token": "sk-ant-oat01-test",
+                "refresh_token": "sk-ant-ort01-test",
+                "expires_at": 9999999999_i64
+            }
+        }
+    });
+    std::fs::write(
+        &auth_path,
+        serde_json::to_string(&v2).expect("serialize v2"),
+    )
+    .expect("write auth file");
+
+    let manager = AuthManager::new(
+        dir.path().to_path_buf(),
+        /*enable_orbit_code_api_key_env*/ false,
+        AuthCredentialsStoreMode::File,
+    );
+
+    // OpenAI lookup must NOT return the Anthropic token
+    let openai_auth = manager.auth_cached_for_provider(ProviderName::OpenAI);
+    assert!(
+        openai_auth.is_none(),
+        "OpenAI lookup should not return Anthropic auth, got: {openai_auth:?}"
+    );
+
+    // Anthropic lookup should still work
+    let anthropic_auth = manager.auth_cached_for_provider(ProviderName::Anthropic);
+    assert!(
+        anthropic_auth.is_some(),
+        "Anthropic lookup should find the OAuth token"
+    );
+    assert!(matches!(anthropic_auth, Some(CodexAuth::AnthropicOAuth(_))));
+}
+
+#[test]
+fn auth_cached_for_provider_openai_finds_openai_in_v2_storage() {
+    let dir = tempdir().expect("failed to create tempdir");
+    let auth_path = dir.path().join("auth.json");
+    let v2 = json!({
+        "version": 2,
+        "providers": {
+            "anthropic": {
+                "type": "anthropic_oauth",
+                "access_token": "sk-ant-oat01-test",
+                "refresh_token": "sk-ant-ort01-test",
+                "expires_at": 9999999999_i64
+            },
+            "openai": {
+                "type": "openai_api_key",
+                "key": "sk-openai-test"
+            }
+        }
+    });
+    std::fs::write(
+        &auth_path,
+        serde_json::to_string(&v2).expect("serialize v2"),
+    )
+    .expect("write auth file");
+
+    let manager = AuthManager::new(
+        dir.path().to_path_buf(),
+        /*enable_orbit_code_api_key_env*/ false,
+        AuthCredentialsStoreMode::File,
+    );
+
+    let openai_auth = manager.auth_cached_for_provider(ProviderName::OpenAI);
+    assert!(
+        openai_auth.is_some(),
+        "OpenAI lookup should find OpenAI auth from v2 storage"
+    );
 }

@@ -1,3 +1,4 @@
+pub mod anthropic;
 mod storage;
 
 use async_trait::async_trait;
@@ -19,9 +20,14 @@ use orbit_code_app_server_protocol::AuthMode as ApiAuthMode;
 use orbit_code_otel::TelemetryAuthMode;
 use orbit_code_protocol::config_types::ForcedLoginMethod;
 
+pub use crate::auth::anthropic::AnthropicApiKeyAuth;
+pub use crate::auth::anthropic::AnthropicOAuthAuth;
 pub use crate::auth::storage::AuthCredentialsStoreMode;
 pub use crate::auth::storage::AuthDotJson;
+pub use crate::auth::storage::AuthDotJsonV2;
 use crate::auth::storage::AuthStorageBackend;
+pub use crate::auth::storage::ProviderAuth;
+pub use crate::auth::storage::ProviderName;
 use crate::auth::storage::create_auth_storage;
 use crate::config::Config;
 use crate::error::RefreshTokenFailedError;
@@ -45,6 +51,8 @@ use thiserror::Error;
 pub enum AuthMode {
     ApiKey,
     Chatgpt,
+    AnthropicApiKey,
+    AnthropicOAuth,
 }
 
 impl From<AuthMode> for TelemetryAuthMode {
@@ -52,6 +60,8 @@ impl From<AuthMode> for TelemetryAuthMode {
         match mode {
             AuthMode::ApiKey => TelemetryAuthMode::ApiKey,
             AuthMode::Chatgpt => TelemetryAuthMode::Chatgpt,
+            AuthMode::AnthropicApiKey => TelemetryAuthMode::AnthropicApiKey,
+            AuthMode::AnthropicOAuth => TelemetryAuthMode::AnthropicOAuth,
         }
     }
 }
@@ -62,6 +72,8 @@ pub enum CodexAuth {
     ApiKey(ApiKeyAuth),
     Chatgpt(ChatgptAuth),
     ChatgptAuthTokens(ChatgptAuthTokens),
+    AnthropicApiKey(AnthropicApiKeyAuth),
+    AnthropicOAuth(AnthropicOAuthAuth),
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +198,9 @@ impl CodexAuth {
                 Ok(Self::ChatgptAuthTokens(ChatgptAuthTokens { state }))
             }
             ApiAuthMode::ApiKey => unreachable!("api key mode is handled above"),
+            ApiAuthMode::AnthropicApiKey | ApiAuthMode::AnthropicOAuth => {
+                unreachable!("anthropic auth modes are handled by the Anthropic provider")
+            }
         }
     }
 
@@ -205,6 +220,8 @@ impl CodexAuth {
         match self {
             Self::ApiKey(_) => AuthMode::ApiKey,
             Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => AuthMode::Chatgpt,
+            Self::AnthropicApiKey(_) => AuthMode::AnthropicApiKey,
+            Self::AnthropicOAuth(_) => AuthMode::AnthropicOAuth,
         }
     }
 
@@ -213,6 +230,8 @@ impl CodexAuth {
             Self::ApiKey(_) => ApiAuthMode::ApiKey,
             Self::Chatgpt(_) => ApiAuthMode::Chatgpt,
             Self::ChatgptAuthTokens(_) => ApiAuthMode::ChatgptAuthTokens,
+            Self::AnthropicApiKey(_) => ApiAuthMode::AnthropicApiKey,
+            Self::AnthropicOAuth(_) => ApiAuthMode::AnthropicOAuth,
         }
     }
 
@@ -228,11 +247,12 @@ impl CodexAuth {
         matches!(self, Self::ChatgptAuthTokens(_))
     }
 
-    /// Returns `None` if `auth_mode() != AuthMode::ApiKey`.
+    /// Returns `None` if not an API key auth mode.
     pub fn api_key(&self) -> Option<&str> {
         match self {
             Self::ApiKey(auth) => Some(auth.api_key.as_str()),
-            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => None,
+            Self::AnthropicApiKey(auth) => Some(auth.api_key()),
+            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) | Self::AnthropicOAuth(_) => None,
         }
     }
 
@@ -253,6 +273,8 @@ impl CodexAuth {
     pub fn get_token(&self) -> Result<String, std::io::Error> {
         match self {
             Self::ApiKey(auth) => Ok(auth.api_key.clone()),
+            Self::AnthropicApiKey(auth) => Ok(auth.api_key().to_string()),
+            Self::AnthropicOAuth(auth) => Ok(auth.access_token().to_string()),
             Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => {
                 let access_token = self.get_token_data()?.access_token;
                 Ok(access_token)
@@ -310,7 +332,7 @@ impl CodexAuth {
         let state = match self {
             Self::Chatgpt(auth) => &auth.state,
             Self::ChatgptAuthTokens(auth) => &auth.state,
-            Self::ApiKey(_) => return None,
+            Self::ApiKey(_) | Self::AnthropicApiKey(_) | Self::AnthropicOAuth(_) => return None,
         };
         #[expect(clippy::unwrap_used)]
         state.auth_dot_json.lock().unwrap().clone()
@@ -412,6 +434,18 @@ pub fn logout(
     storage.delete()
 }
 
+/// Delete auth credentials for a single provider, preserving credentials for
+/// other providers. Returns `Ok(true)` if the provider had stored credentials
+/// that were removed, `Ok(false)` if the provider had no credentials.
+pub fn logout_provider(
+    orbit_code_home: &Path,
+    provider: ProviderName,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+) -> std::io::Result<bool> {
+    let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
+    storage.delete_provider(provider)
+}
+
 /// Writes an `auth.json` that contains only the API key.
 pub fn login_with_api_key(
     orbit_code_home: &Path,
@@ -447,9 +481,21 @@ pub fn login_with_chatgpt_auth_tokens(
 }
 
 /// Persist the provided auth payload using the specified backend.
+/// Internally converts v1 AuthDotJson to v2 format before saving.
 pub fn save_auth(
     orbit_code_home: &Path,
     auth: &AuthDotJson,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+) -> std::io::Result<()> {
+    let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
+    let v2 = AuthDotJsonV2::from(auth.clone());
+    storage.save(&v2)
+}
+
+/// Persist a v2 auth payload directly using the specified backend.
+pub fn save_auth_v2(
+    orbit_code_home: &Path,
+    auth: &AuthDotJsonV2,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> std::io::Result<()> {
     let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
@@ -461,10 +507,25 @@ pub fn save_auth(
 /// provided only for tests. Production code should not directly load
 /// from the auth.json storage. It should use the AuthManager abstraction
 /// instead.
+///
+/// Returns the v1 (OpenAI-centric) view of stored credentials for backward
+/// compatibility. Use `load_auth_dot_json_v2` for full multi-provider access.
 pub fn load_auth_dot_json(
     orbit_code_home: &Path,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> std::io::Result<Option<AuthDotJson>> {
+    let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
+    match storage.load()? {
+        Some(v2) => Ok(Some(v2.to_v1_openai())),
+        None => Ok(None),
+    }
+}
+
+/// Load CLI auth data in v2 format (multi-provider).
+pub fn load_auth_dot_json_v2(
+    orbit_code_home: &Path,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+) -> std::io::Result<Option<AuthDotJsonV2>> {
     let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
     storage.load()
 }
@@ -483,6 +544,8 @@ pub fn enforce_login_restrictions(config: &Config) -> std::io::Result<()> {
         let method_violation = match (required_method, auth.auth_mode()) {
             (ForcedLoginMethod::Api, AuthMode::ApiKey) => None,
             (ForcedLoginMethod::Chatgpt, AuthMode::Chatgpt) => None,
+            // Anthropic auth is not subject to OpenAI org enforcement
+            (_, AuthMode::AnthropicApiKey | AuthMode::AnthropicOAuth) => None,
             (ForcedLoginMethod::Api, AuthMode::Chatgpt) => Some(
                 "API key login is required, but ChatGPT is currently being used. Logging out."
                     .to_string(),
@@ -574,7 +637,9 @@ fn load_auth(
     enable_orbit_code_api_key_env: bool,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> std::io::Result<Option<CodexAuth>> {
-    let build_auth = |auth_dot_json: AuthDotJson, storage_mode| {
+    tracing::info!("load_auth: home={}", orbit_code_home.display());
+    let build_openai_auth = |v2: &AuthDotJsonV2, storage_mode| {
+        let auth_dot_json = v2.to_v1_openai();
         let client = crate::default_client::create_client();
         CodexAuth::from_auth_dot_json(orbit_code_home, auth_dot_json, storage_mode, client)
     };
@@ -594,8 +659,8 @@ fn load_auth(
         orbit_code_home.to_path_buf(),
         AuthCredentialsStoreMode::Ephemeral,
     );
-    if let Some(auth_dot_json) = ephemeral_storage.load()? {
-        let auth = build_auth(auth_dot_json, AuthCredentialsStoreMode::Ephemeral)?;
+    if let Some(v2) = ephemeral_storage.load()? {
+        let auth = build_openai_auth(&v2, AuthCredentialsStoreMode::Ephemeral)?;
         return Ok(Some(auth));
     }
 
@@ -606,13 +671,35 @@ fn load_auth(
 
     // Fall back to the configured persistent store (file/keyring/auto) for managed auth.
     let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
-    let auth_dot_json = match storage.load()? {
+    let v2 = match storage.load()? {
         Some(auth) => auth,
         None => return Ok(None),
     };
 
-    let auth = build_auth(auth_dot_json, auth_credentials_store_mode)?;
-    Ok(Some(auth))
+    // Try OpenAI auth first — but only if the v2 data actually has OpenAI
+    // provider data. Without this guard, `to_v1_openai()` returns a default
+    // AuthDotJson that creates an empty ChatGPT auth with no token data,
+    // causing "Token data is not available" errors downstream.
+    let has_openai_data = v2.provider_auth(ProviderName::OpenAI).is_some();
+    if has_openai_data && let Ok(auth) = build_openai_auth(&v2, auth_credentials_store_mode) {
+        tracing::info!("load_auth: loaded OpenAI auth");
+        return Ok(Some(auth));
+    }
+
+    // Check for Anthropic provider auth in the v2 data.
+    if let Some(provider_auth) = v2.provider_auth(ProviderName::Anthropic)
+        && let Some(auth) = codex_auth_from_provider_auth(
+            provider_auth,
+            orbit_code_home,
+            auth_credentials_store_mode,
+        )
+    {
+        tracing::info!("load_auth: loaded Anthropic auth from v2 storage");
+        return Ok(Some(auth));
+    }
+
+    tracing::info!("load_auth: no auth found in v2 storage");
+    Ok(None)
 }
 
 // Persist refreshed tokens into auth storage and update last_refresh.
@@ -622,10 +709,12 @@ fn persist_tokens(
     access_token: Option<String>,
     refresh_token: Option<String>,
 ) -> std::io::Result<AuthDotJson> {
-    let mut auth_dot_json = storage
+    let mut v2 = storage
         .load()?
         .ok_or(std::io::Error::other("Token data is not available."))?;
 
+    // Extract the OpenAI provider auth, modify tokens, and save back.
+    let mut auth_dot_json = v2.to_v1_openai();
     let tokens = auth_dot_json.tokens.get_or_insert_with(TokenData::default);
     if let Some(id_token) = id_token {
         tokens.id_token = parse_chatgpt_jwt_claims(&id_token).map_err(std::io::Error::other)?;
@@ -637,8 +726,45 @@ fn persist_tokens(
         tokens.refresh_token = refresh_token;
     }
     auth_dot_json.last_refresh = Some(Utc::now());
-    storage.save(&auth_dot_json)?;
+
+    // Convert back to v2 and merge into existing v2 storage (preserving other providers)
+    let updated_v1_as_v2 = AuthDotJsonV2::from(auth_dot_json.clone());
+    if let Some(openai_auth) = updated_v1_as_v2.provider_auth(ProviderName::OpenAI) {
+        v2.set_provider_auth(ProviderName::OpenAI, openai_auth.clone());
+    }
+    storage.save(&v2)?;
     Ok(auth_dot_json)
+}
+
+/// Convert a ProviderAuth entry from storage to a CodexAuth instance.
+fn codex_auth_from_provider_auth(
+    provider_auth: &ProviderAuth,
+    orbit_code_home: &Path,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+) -> Option<CodexAuth> {
+    match provider_auth {
+        ProviderAuth::AnthropicApiKey { key } => Some(CodexAuth::AnthropicApiKey(
+            AnthropicApiKeyAuth::new(key.clone()),
+        )),
+        ProviderAuth::AnthropicOAuth {
+            access_token,
+            refresh_token,
+            expires_at,
+        } => {
+            let storage =
+                create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
+            Some(CodexAuth::AnthropicOAuth(
+                crate::auth::anthropic::AnthropicOAuthAuth {
+                    access_token: access_token.clone(),
+                    refresh_token: refresh_token.clone(),
+                    expires_at: *expires_at,
+                    storage,
+                },
+            ))
+        }
+        // OpenAI variants are handled by the existing load_auth() path
+        _ => None,
+    }
 }
 
 // Requests refreshed ChatGPT OAuth tokens from the auth service using a refresh token.
@@ -867,6 +993,7 @@ enum ReloadOutcome {
 enum UnauthorizedRecoveryMode {
     Managed,
     External,
+    AnthropicOAuth,
 }
 
 // UnauthorizedRecovery is a state machine that handles an attempt to refresh the authentication when requests
@@ -909,12 +1036,15 @@ impl UnauthorizedRecovery {
             .is_some_and(CodexAuth::is_external_chatgpt_tokens)
         {
             UnauthorizedRecoveryMode::External
+        } else if matches!(cached_auth.as_ref(), Some(CodexAuth::AnthropicOAuth(_))) {
+            UnauthorizedRecoveryMode::AnthropicOAuth
         } else {
             UnauthorizedRecoveryMode::Managed
         };
         let step = match mode {
             UnauthorizedRecoveryMode::Managed => UnauthorizedRecoveryStep::Reload,
             UnauthorizedRecoveryMode::External => UnauthorizedRecoveryStep::ExternalRefresh,
+            UnauthorizedRecoveryMode::AnthropicOAuth => UnauthorizedRecoveryStep::Reload,
         };
         Self {
             manager,
@@ -925,12 +1055,11 @@ impl UnauthorizedRecovery {
     }
 
     pub fn has_next(&self) -> bool {
-        if !self
-            .manager
-            .auth_cached()
+        let auth = self.manager.auth_cached();
+        let is_recoverable = auth
             .as_ref()
-            .is_some_and(CodexAuth::is_chatgpt_auth)
-        {
+            .is_some_and(|a| a.is_chatgpt_auth() || matches!(a, CodexAuth::AnthropicOAuth(_)));
+        if !is_recoverable {
             return false;
         }
 
@@ -944,13 +1073,12 @@ impl UnauthorizedRecovery {
     }
 
     pub fn unavailable_reason(&self) -> &'static str {
-        if !self
-            .manager
-            .auth_cached()
+        let auth = self.manager.auth_cached();
+        let is_recoverable = auth
             .as_ref()
-            .is_some_and(CodexAuth::is_chatgpt_auth)
-        {
-            return "not_chatgpt_auth";
+            .is_some_and(|a| a.is_chatgpt_auth() || matches!(a, CodexAuth::AnthropicOAuth(_)));
+        if !is_recoverable {
+            return "not_recoverable_auth";
         }
 
         if self.mode == UnauthorizedRecoveryMode::External
@@ -970,6 +1098,7 @@ impl UnauthorizedRecovery {
         match self.mode {
             UnauthorizedRecoveryMode::Managed => "managed",
             UnauthorizedRecoveryMode::External => "external",
+            UnauthorizedRecoveryMode::AnthropicOAuth => "anthropic_oauth",
         }
     }
 
@@ -988,6 +1117,11 @@ impl UnauthorizedRecovery {
                 RefreshTokenFailedReason::Other,
                 "No more recovery steps available.",
             )));
+        }
+
+        // Anthropic OAuth has its own recovery path — skip account-id guard
+        if self.mode == UnauthorizedRecoveryMode::AnthropicOAuth {
+            return self.next_anthropic_oauth().await;
         }
 
         match self.step {
@@ -1038,6 +1172,40 @@ impl UnauthorizedRecovery {
         Ok(UnauthorizedRecoveryStepResult {
             auth_state_changed: None,
         })
+    }
+
+    /// Anthropic OAuth recovery: reload from storage, then force-refresh.
+    /// No account-id guard — Anthropic doesn't use account IDs.
+    async fn next_anthropic_oauth(
+        &mut self,
+    ) -> Result<UnauthorizedRecoveryStepResult, RefreshTokenError> {
+        match self.step {
+            UnauthorizedRecoveryStep::Reload => {
+                // Reload from storage — another process may have refreshed the token.
+                let old_auth = self.manager.auth_cached();
+                self.manager.reload();
+                let new_auth = self.manager.auth_cached();
+                let changed = !AuthManager::auths_equal(old_auth.as_ref(), new_auth.as_ref());
+                self.step = UnauthorizedRecoveryStep::RefreshToken;
+                Ok(UnauthorizedRecoveryStepResult {
+                    auth_state_changed: Some(changed),
+                })
+            }
+            UnauthorizedRecoveryStep::RefreshToken => {
+                // Force refresh — we got a 401, the token is definitely bad.
+                self.manager.force_refresh_anthropic_oauth().await?;
+                self.step = UnauthorizedRecoveryStep::Done;
+                Ok(UnauthorizedRecoveryStepResult {
+                    auth_state_changed: Some(true),
+                })
+            }
+            _ => {
+                self.step = UnauthorizedRecoveryStep::Done;
+                Ok(UnauthorizedRecoveryStepResult {
+                    auth_state_changed: None,
+                })
+            }
+        }
     }
 }
 
@@ -1124,6 +1292,81 @@ impl AuthManager {
     /// Current cached auth (clone) without attempting a refresh.
     pub fn auth_cached(&self) -> Option<CodexAuth> {
         self.inner.read().ok().and_then(|c| c.auth.clone())
+    }
+
+    /// Get cached auth for a specific provider without refresh.
+    ///
+    /// Checks the currently cached auth and returns it only if it belongs
+    /// to the requested provider. Also checks env vars and persistent storage
+    /// for the requested provider if the cached auth doesn't match.
+    pub fn auth_cached_for_provider(&self, provider: ProviderName) -> Option<CodexAuth> {
+        // Check if cached auth matches the requested provider
+        if let Some(auth) = self.auth_cached() {
+            let is_match = matches!(
+                (&auth, provider),
+                (
+                    CodexAuth::ApiKey(_) | CodexAuth::Chatgpt(_) | CodexAuth::ChatgptAuthTokens(_),
+                    ProviderName::OpenAI,
+                ) | (
+                    CodexAuth::AnthropicApiKey(_) | CodexAuth::AnthropicOAuth(_),
+                    ProviderName::Anthropic,
+                )
+            );
+            if is_match {
+                return Some(auth);
+            }
+        }
+
+        // If no cached match, try loading specifically for the provider
+        match provider {
+            ProviderName::Anthropic => {
+                // Check persistent storage first — OAuth tokens take priority
+                // over env var so mid-session provider switches work correctly.
+                if let Ok(Some(v2)) =
+                    load_auth_dot_json_v2(&self.orbit_code_home, self.auth_credentials_store_mode)
+                    && let Some(provider_auth) = v2.provider_auth(ProviderName::Anthropic)
+                {
+                    return codex_auth_from_provider_auth(
+                        provider_auth,
+                        &self.orbit_code_home,
+                        self.auth_credentials_store_mode,
+                    );
+                }
+                // Fall back to ANTHROPIC_API_KEY env var
+                if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")
+                    && !key.is_empty()
+                {
+                    return Some(CodexAuth::AnthropicApiKey(AnthropicApiKeyAuth::new(key)));
+                }
+                None
+            }
+            ProviderName::OpenAI => {
+                // Check OPENAI_API_KEY env var
+                if let Ok(key) = std::env::var("OPENAI_API_KEY")
+                    && !key.is_empty()
+                {
+                    let client = crate::default_client::create_client();
+                    return Some(CodexAuth::from_api_key_with_client(&key, client));
+                }
+                // Check persistent v2 storage for OpenAI provider
+                if let Ok(Some(v2)) =
+                    load_auth_dot_json_v2(&self.orbit_code_home, self.auth_credentials_store_mode)
+                    && v2.provider_auth(ProviderName::OpenAI).is_some()
+                {
+                    let auth_dot_json = v2.to_v1_openai();
+                    let client = crate::default_client::create_client();
+                    if let Ok(auth) = CodexAuth::from_auth_dot_json(
+                        &self.orbit_code_home,
+                        auth_dot_json,
+                        self.auth_credentials_store_mode,
+                        client,
+                    ) {
+                        return Some(auth);
+                    }
+                }
+                None
+            }
+        }
     }
 
     /// Current cached auth (clone). May be `None` if not logged in or load failed.
@@ -1334,7 +1577,10 @@ impl AuthManager {
                     .await?;
                 Ok(())
             }
-            CodexAuth::ApiKey(_) => Ok(()),
+            // API key and Anthropic API key auth don't need token refresh.
+            CodexAuth::ApiKey(_) | CodexAuth::AnthropicApiKey(_) => Ok(()),
+            // Anthropic OAuth refresh will be handled separately when needed.
+            CodexAuth::AnthropicOAuth(_) => Ok(()),
         }
     }
 
@@ -1347,6 +1593,118 @@ impl AuthManager {
         // Always reload to clear any cached auth (even if file absent).
         self.reload();
         Ok(removed)
+    }
+
+    /// Proactively refresh Anthropic OAuth if the token is expiring soon.
+    /// Best-effort: failures are logged but don't prevent the request from proceeding
+    /// (the stale token might still work, and 401 recovery handles the rest).
+    pub async fn refresh_anthropic_oauth_if_needed(&self) {
+        let auth = match self.auth_cached_for_provider(ProviderName::Anthropic) {
+            Some(CodexAuth::AnthropicOAuth(ref oauth)) => oauth.clone(),
+            _ => return,
+        };
+
+        if !auth.is_expiring_within(anthropic::ANTHROPIC_TOKEN_REFRESH_BUFFER_SECONDS) {
+            return;
+        }
+
+        tracing::info!("Anthropic OAuth token expiring soon, refreshing proactively");
+        let client = crate::default_client::build_reqwest_client();
+        match orbit_code_anthropic::refresh_anthropic_token(&client, auth.refresh_token()).await {
+            Ok(tokens) => {
+                let now = chrono::Utc::now().timestamp();
+                let expires_at =
+                    now.saturating_add(i64::try_from(tokens.expires_in).unwrap_or(3600));
+                // Persist refreshed tokens. ONLY reload cache after a successful save.
+                let storage = create_auth_storage(
+                    self.orbit_code_home.clone(),
+                    self.auth_credentials_store_mode,
+                );
+                match storage.load() {
+                    Ok(Some(mut v2)) => {
+                        v2.set_provider_auth(
+                            ProviderName::Anthropic,
+                            ProviderAuth::AnthropicOAuth {
+                                access_token: tokens.access_token,
+                                refresh_token: tokens.refresh_token,
+                                expires_at,
+                            },
+                        );
+                        match storage.save(&v2) {
+                            Ok(()) => {
+                                self.reload();
+                            }
+                            Err(e) => tracing::warn!(
+                                "Anthropic refresh succeeded but persist failed: {e}"
+                            ),
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::warn!(
+                            "Anthropic refresh succeeded but no auth storage found; keeping cached token"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Anthropic refresh succeeded but storage unreadable: {e}; keeping cached token"
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Proactive Anthropic OAuth refresh failed: {e}");
+            }
+        }
+    }
+
+    /// Force-refresh an Anthropic OAuth token. Unlike proactive refresh, this
+    /// always refreshes (no expiry check) and returns a typed error.
+    pub async fn force_refresh_anthropic_oauth(
+        &self,
+    ) -> std::result::Result<(), RefreshTokenError> {
+        let auth = self.auth_cached_for_provider(ProviderName::Anthropic);
+        let Some(CodexAuth::AnthropicOAuth(ref oauth)) = auth else {
+            return Err(RefreshTokenError::Permanent(RefreshTokenFailedError::new(
+                RefreshTokenFailedReason::Other,
+                "not AnthropicOAuth",
+            )));
+        };
+        let client = crate::default_client::build_reqwest_client();
+        let tokens = orbit_code_anthropic::refresh_anthropic_token(&client, oauth.refresh_token())
+            .await
+            .map_err(|e| RefreshTokenError::Transient(std::io::Error::other(e.to_string())))?;
+
+        let now = chrono::Utc::now().timestamp();
+        let expires_at = now.saturating_add(i64::try_from(tokens.expires_in).unwrap_or(3600));
+        let storage = create_auth_storage(
+            self.orbit_code_home.clone(),
+            self.auth_credentials_store_mode,
+        );
+        match storage.load() {
+            Ok(Some(mut v2)) => {
+                v2.set_provider_auth(
+                    ProviderName::Anthropic,
+                    ProviderAuth::AnthropicOAuth {
+                        access_token: tokens.access_token,
+                        refresh_token: tokens.refresh_token,
+                        expires_at,
+                    },
+                );
+                storage.save(&v2).map_err(RefreshTokenError::Transient)?;
+                self.reload();
+                Ok(())
+            }
+            Ok(None) => {
+                tracing::warn!("Force refresh succeeded but no auth storage; keeping cached token");
+                Err(RefreshTokenError::Transient(std::io::Error::other(
+                    "no auth storage after refresh",
+                )))
+            }
+            Err(e) => {
+                tracing::warn!("Force refresh succeeded but storage unreadable: {e}");
+                Err(RefreshTokenError::Transient(e))
+            }
+        }
     }
 
     pub fn get_api_auth_mode(&self) -> Option<ApiAuthMode> {
