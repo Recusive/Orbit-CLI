@@ -1612,7 +1612,10 @@ impl AuthManager {
         self.auth_cached().as_ref().map(CodexAuth::auth_mode)
     }
 
-    async fn refresh_if_stale(&self, auth: &CodexAuth) -> Result<bool, RefreshTokenError> {
+    pub(crate) async fn refresh_if_stale(
+        &self,
+        auth: &CodexAuth,
+    ) -> Result<bool, RefreshTokenError> {
         let chatgpt_auth = match auth {
             CodexAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
             _ => return Ok(false),

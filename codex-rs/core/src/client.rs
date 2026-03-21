@@ -543,19 +543,28 @@ impl ModelClient {
         provider_override: Option<&ModelProviderInfo>,
     ) -> Result<CurrentClientSetup> {
         let provider = provider_override.unwrap_or(&self.state.provider);
-        // When overriding to a different provider, resolve auth for THAT provider
-        // instead of using the cached session auth (which belongs to the original provider).
+        // Always resolve auth for the EFFECTIVE provider (override or session default).
+        // This prevents Anthropic tokens leaking to OpenAI (and vice versa) regardless
+        // of whether this is a mid-session switch or the initial session provider.
         let auth = match self.state.auth_manager.as_ref() {
-            Some(manager) if provider_override.is_some() => {
-                // Derive provider name from the override's wire_api
+            Some(manager) => {
                 let provider_name = if provider.wire_api == WireApi::AnthropicMessages {
                     ProviderName::Anthropic
                 } else {
                     ProviderName::OpenAI
                 };
-                manager.auth_cached_for_provider(provider_name)
+                let cached = manager.auth_cached_for_provider(provider_name);
+                // Refresh stale ChatGPT tokens (no-op for API keys and Anthropic OAuth)
+                if let Some(ref auth) = cached {
+                    if let Err(err) = manager.refresh_if_stale(auth).await {
+                        tracing::error!("Failed to refresh token: {err}");
+                    }
+                    // Re-fetch after potential refresh
+                    manager.auth_cached_for_provider(provider_name)
+                } else {
+                    None
+                }
             }
-            Some(manager) => manager.auth().await,
             None => None,
         };
         let api_provider = provider.to_api_provider(auth.as_ref().map(CodexAuth::auth_mode))?;
