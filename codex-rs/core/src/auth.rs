@@ -480,15 +480,27 @@ pub fn login_with_chatgpt_auth_tokens(
 }
 
 /// Persist the provided auth payload using the specified backend.
-/// Internally converts v1 AuthDotJson to v2 format before saving.
+/// Converts v1 AuthDotJson to v2 format and merges into existing storage,
+/// preserving credentials for other providers (e.g., saving OpenAI auth
+/// does not clobber an existing Anthropic entry).
 pub fn save_auth(
     orbit_code_home: &Path,
     auth: &AuthDotJson,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> std::io::Result<()> {
     let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
-    let v2 = AuthDotJsonV2::from(auth.clone());
-    storage.save(&v2)
+    let new_v2 = AuthDotJsonV2::from(auth.clone());
+    // Merge into existing v2 storage to preserve other providers.
+    let merged = match storage.load()? {
+        Some(mut existing) => {
+            for (provider, provider_auth) in &new_v2.providers {
+                existing.set_provider_auth(*provider, provider_auth.clone());
+            }
+            existing
+        }
+        None => new_v2,
+    };
+    storage.save(&merged)
 }
 
 /// Persist a v2 auth payload directly using the specified backend.
