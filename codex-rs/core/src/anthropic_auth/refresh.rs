@@ -34,43 +34,7 @@ pub(crate) async fn refresh_if_needed(manager: &AuthManager) {
     let client = crate::default_client::build_reqwest_client();
     match orbit_code_anthropic::refresh_anthropic_token(&client, auth.refresh_token()).await {
         Ok(tokens) => {
-            let now = chrono::Utc::now().timestamp();
-            let expires_at = now.saturating_add(i64::try_from(tokens.expires_in).unwrap_or(3600));
-            // Persist refreshed tokens. ONLY reload cache after a successful save.
-            let storage = create_auth_storage(
-                manager.orbit_code_home().to_path_buf(),
-                manager.auth_credentials_store_mode(),
-            );
-            match storage.load() {
-                Ok(Some(mut v2)) => {
-                    v2.set_provider_auth(
-                        ProviderName::Anthropic,
-                        ProviderAuth::AnthropicOAuth {
-                            access_token: tokens.access_token,
-                            refresh_token: tokens.refresh_token,
-                            expires_at,
-                        },
-                    );
-                    match storage.save(&v2) {
-                        Ok(()) => {
-                            manager.reload();
-                        }
-                        Err(e) => {
-                            tracing::warn!("Anthropic refresh succeeded but persist failed: {e}")
-                        }
-                    }
-                }
-                Ok(None) => {
-                    tracing::warn!(
-                        "Anthropic refresh succeeded but no auth storage found; keeping cached token"
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Anthropic refresh succeeded but storage unreadable: {e}; keeping cached token"
-                    );
-                }
-            }
+            persist_refreshed_tokens(manager, tokens);
         }
         Err(e) => {
             tracing::warn!("Proactive Anthropic OAuth refresh failed: {e}");
@@ -95,6 +59,13 @@ pub(crate) async fn force_refresh(
         .await
         .map_err(|e| RefreshTokenError::Transient(std::io::Error::other(e.to_string())))?;
 
+    persist_refreshed_tokens(manager, tokens);
+    Ok(())
+}
+
+/// Persist refreshed Anthropic OAuth tokens to v2 storage and reload the
+/// auth cache. Failures are logged as warnings but do not propagate.
+fn persist_refreshed_tokens(manager: &AuthManager, tokens: orbit_code_anthropic::RefreshedTokens) {
     let now = chrono::Utc::now().timestamp();
     let expires_at = now.saturating_add(i64::try_from(tokens.expires_in).unwrap_or(3600));
     let storage = create_auth_storage(
@@ -111,19 +82,24 @@ pub(crate) async fn force_refresh(
                     expires_at,
                 },
             );
-            storage.save(&v2).map_err(RefreshTokenError::Transient)?;
-            manager.reload();
-            Ok(())
+            match storage.save(&v2) {
+                Ok(()) => {
+                    manager.reload();
+                }
+                Err(e) => {
+                    tracing::warn!("Anthropic refresh succeeded but persist failed: {e}")
+                }
+            }
         }
         Ok(None) => {
-            tracing::warn!("Force refresh succeeded but no auth storage; keeping cached token");
-            Err(RefreshTokenError::Transient(std::io::Error::other(
-                "no auth storage after refresh",
-            )))
+            tracing::warn!(
+                "Anthropic refresh succeeded but no auth storage found; keeping cached token"
+            );
         }
         Err(e) => {
-            tracing::warn!("Force refresh succeeded but storage unreadable: {e}");
-            Err(RefreshTokenError::Transient(e))
+            tracing::warn!(
+                "Anthropic refresh succeeded but storage unreadable: {e}; keeping cached token"
+            );
         }
     }
 }

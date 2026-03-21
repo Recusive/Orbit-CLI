@@ -8,7 +8,7 @@
 //! required by the Anthropic API (tool name prefixing and system prompt
 //! prepending).
 
-use crate::AuthManager;
+use crate::auth::AuthManager;
 use crate::auth::CodexAuth;
 use crate::auth::ProviderName;
 use crate::error::CodexErr;
@@ -22,7 +22,7 @@ use orbit_code_anthropic::ContentBlock;
 use orbit_code_anthropic::MessagesRequest;
 
 /// Tool name prefix required by the Anthropic OAuth endpoint.
-pub(crate) const OAUTH_TOOL_PREFIX: &str = "mcp_";
+const OAUTH_TOOL_PREFIX: &str = "mcp_";
 
 /// Resolve Anthropic authentication from AuthManager, falling back to
 /// provider config headers and env vars.
@@ -104,7 +104,7 @@ pub(crate) fn apply_oauth_modifications(request: &mut MessagesRequest) {
 
 /// Prefix tool names with `mcp_` for OAuth mode (Anthropic requirement).
 /// Must prefix BOTH tool definitions AND tool_use blocks in message history.
-pub(crate) fn prefix_tool_names_for_oauth(request: &mut MessagesRequest) {
+fn prefix_tool_names_for_oauth(request: &mut MessagesRequest) {
     // 1. Prefix tool definitions
     if let Some(tools) = &mut request.tools {
         for tool in tools {

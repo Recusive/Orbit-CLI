@@ -1493,12 +1493,12 @@ impl AuthManager {
     }
 
     /// The Orbit Code home directory used to locate auth storage.
-    pub fn orbit_code_home(&self) -> &Path {
+    pub(crate) fn orbit_code_home(&self) -> &Path {
         &self.orbit_code_home
     }
 
     /// The credential storage mode (file, keyring, auto, ephemeral).
-    pub fn auth_credentials_store_mode(&self) -> AuthCredentialsStoreMode {
+    pub(crate) fn auth_credentials_store_mode(&self) -> AuthCredentialsStoreMode {
         self.auth_credentials_store_mode
     }
 
