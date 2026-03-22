@@ -772,8 +772,8 @@ OPENAI_API_KEY=sk-... just codex exec "say hello" --quiet
 # Test with Anthropic (API key)
 ANTHROPIC_API_KEY=sk-ant-... just codex exec -m claude-sonnet-4 "say hello" --quiet
 
-# Test with Anthropic (OAuth — must login first)
-just codex login --with-anthropic
+# Test with Anthropic (API key — must login first)
+just codex login --provider anthropic
 just codex exec -m claude-sonnet-4 "say hello" --quiet
 
 # Test with a local model (Ollama)

@@ -32,6 +32,7 @@ use crate::auth::REFRESH_TOKEN_URL;
 use crate::auth::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
 use crate::auth::RefreshTokenError;
 use crate::auth::TOKEN_REFRESH_INTERVAL;
+use crate::auth::persistence::auth_mode_for_provider_auth;
 use crate::auth::persistence::codex_auth_from_provider_auth;
 use crate::auth::persistence::load_auth;
 use crate::auth::persistence::load_auth_dot_json_v2;
@@ -196,9 +197,24 @@ impl AuthManager {
                 // over env var so mid-session provider switches work correctly.
                 if let Ok(Some(v2)) =
                     load_auth_dot_json_v2(&self.orbit_code_home, self.auth_credentials_store_mode)
-                    && let Some(provider_auth) = v2.provider_auth(ProviderName::Anthropic)
                 {
-                    return codex_auth_from_provider_auth(provider_auth);
+                    let preferred = v2
+                        .preferred_auth_modes
+                        .get(&ProviderName::Anthropic)
+                        .copied();
+
+                    // Check if preferred mode points to alternate credential
+                    if let Some(alt) = v2.alternate_credentials.get(&ProviderName::Anthropic)
+                        && preferred == Some(auth_mode_for_provider_auth(alt))
+                        && let Some(auth) = codex_auth_from_provider_auth(alt)
+                    {
+                        return Some(auth);
+                    }
+
+                    // Default: use active credential from providers
+                    if let Some(provider_auth) = v2.provider_auth(ProviderName::Anthropic) {
+                        return codex_auth_from_provider_auth(provider_auth);
+                    }
                 }
                 // Fall back to ANTHROPIC_API_KEY env var
                 if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")

@@ -836,3 +836,156 @@ fn real_flow_chatgpt_login_then_anthropic_onboarding_preserves_both() {
         "Anthropic auth should be AnthropicOAuth variant"
     );
 }
+
+#[test]
+fn save_auth_v2_preserves_alternate_credentials() {
+    let dir = tempdir().expect("tempdir");
+    let store_mode = AuthCredentialsStoreMode::File;
+
+    // Save initial: Anthropic API key active, OAuth as alternate
+    let mut initial = AuthDotJsonV2::new();
+    initial.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-key".to_string(),
+        },
+    );
+    initial.alternate_credentials.insert(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    initial
+        .preferred_auth_modes
+        .insert(ProviderName::Anthropic, ApiAuthMode::AnthropicApiKey);
+    save_auth_v2(dir.path(), &initial, store_mode).expect("save");
+
+    // Save update: only OpenAI key (should preserve Anthropic alternate + preference)
+    let mut update = AuthDotJsonV2::new();
+    update.set_provider_auth(
+        ProviderName::OpenAI,
+        ProviderAuth::OpenAiApiKey {
+            key: "sk-openai".to_string(),
+        },
+    );
+    save_auth_v2(dir.path(), &update, store_mode).expect("save");
+
+    // Load and verify everything preserved
+    let loaded = load_auth_dot_json_v2(dir.path(), store_mode)
+        .expect("load")
+        .expect("some");
+    assert!(
+        loaded
+            .alternate_credentials
+            .contains_key(&ProviderName::Anthropic)
+    );
+    assert_eq!(
+        loaded.preferred_auth_modes.get(&ProviderName::Anthropic),
+        Some(&ApiAuthMode::AnthropicApiKey)
+    );
+}
+
+/// When the cache holds OpenAI auth and we look up Anthropic, the preferred
+/// mode from storage should determine which Anthropic credential is returned.
+#[test]
+fn auth_cached_for_provider_uses_alternate_when_preferred() {
+    let dir = tempdir().expect("tempdir");
+    let auth_path = dir.path().join("auth.json");
+
+    // OpenAI active (will be cached), Anthropic API key active + OAuth as alternate,
+    // preferred mode says AnthropicOAuth → should return OAuth from alternate.
+    let v2 = json!({
+        "version": 2,
+        "providers": {
+            "openai": {
+                "type": "openai_api_key",
+                "key": "sk-openai-cached"
+            },
+            "anthropic": {
+                "type": "anthropic_api_key",
+                "key": "sk-ant-key"
+            }
+        },
+        "alternate_credentials": {
+            "anthropic": {
+                "type": "anthropic_oauth",
+                "access_token": "sk-ant-oat01-test",
+                "refresh_token": "sk-ant-ort01-test",
+                "expires_at": 9999999999_i64
+            }
+        },
+        "preferred_auth_modes": {
+            "anthropic": "anthropicOAuth"
+        }
+    });
+    std::fs::write(
+        &auth_path,
+        serde_json::to_string(&v2).expect("serialize v2"),
+    )
+    .expect("write auth file");
+
+    let manager = AuthManager::new(
+        dir.path().to_path_buf(),
+        /*enable_orbit_code_api_key_env*/ false,
+        AuthCredentialsStoreMode::File,
+    );
+
+    // Cache has OpenAI, so Anthropic lookup falls through to storage.
+    // preferred_auth_modes says AnthropicOAuth → return alternate OAuth.
+    let auth = manager.auth_cached_for_provider(ProviderName::Anthropic);
+    assert!(
+        matches!(auth, Some(CodexAuth::AnthropicOAuth(_))),
+        "expected AnthropicOAuth when preferred_auth_modes points to alternate, got: {auth:?}"
+    );
+}
+
+/// Without a preferred mode, the active credential from providers is returned.
+#[test]
+fn auth_cached_for_provider_uses_active_when_no_preference() {
+    let dir = tempdir().expect("tempdir");
+    let auth_path = dir.path().join("auth.json");
+
+    // OpenAI active (cached), Anthropic API key active + OAuth alternate, no preference.
+    let v2 = json!({
+        "version": 2,
+        "providers": {
+            "openai": {
+                "type": "openai_api_key",
+                "key": "sk-openai-cached"
+            },
+            "anthropic": {
+                "type": "anthropic_api_key",
+                "key": "sk-ant-key"
+            }
+        },
+        "alternate_credentials": {
+            "anthropic": {
+                "type": "anthropic_oauth",
+                "access_token": "sk-ant-oat01-test",
+                "refresh_token": "sk-ant-ort01-test",
+                "expires_at": 9999999999_i64
+            }
+        }
+    });
+    std::fs::write(
+        &auth_path,
+        serde_json::to_string(&v2).expect("serialize v2"),
+    )
+    .expect("write auth file");
+
+    let manager = AuthManager::new(
+        dir.path().to_path_buf(),
+        /*enable_orbit_code_api_key_env*/ false,
+        AuthCredentialsStoreMode::File,
+    );
+
+    // Cache has OpenAI, Anthropic falls through. No preferred mode → use active.
+    let auth = manager.auth_cached_for_provider(ProviderName::Anthropic);
+    assert!(
+        matches!(auth, Some(CodexAuth::AnthropicApiKey(_))),
+        "expected AnthropicApiKey when no preferred mode, got: {auth:?}"
+    );
+}

@@ -55,6 +55,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use orbit_code_app_server_protocol::ConfigLayerSource;
+use orbit_code_core::auth::ProviderName;
 use orbit_code_core::config::Config;
 use orbit_code_core::config::Constrained;
 use orbit_code_core::config::ConstraintResult;
@@ -280,6 +281,7 @@ mod skills;
 use self::skills::collect_tool_mentions;
 use self::skills::find_app_mentions;
 use self::skills::find_skill_mentions_with_tool_mentions;
+mod auth_popup;
 mod realtime;
 use self::realtime::RealtimeConversationUiState;
 use self::realtime::RenderedUserMessageEvent;
@@ -4501,6 +4503,9 @@ impl ChatWidget {
                 }
                 self.request_quit_without_confirmation();
             }
+            SlashCommand::Auth => {
+                self.on_slash_auth();
+            }
             // SlashCommand::Undo => {
             //     self.app_event_tx.send(AppEvent::CodexOp(Op::Undo));
             // }
@@ -6266,6 +6271,99 @@ impl ChatWidget {
         });
     }
 
+    /// Handle the `/auth` slash command — opens the auth management popup.
+    fn on_slash_auth(&mut self) {
+        auth_popup::on_slash_auth(self);
+    }
+
+    /// Open the auth management sub-popup for a single provider.
+    pub(crate) fn open_auth_provider_management(&mut self, provider: ProviderName) {
+        auth_popup::open_auth_provider_management(self, provider);
+    }
+
+    /// Show a confirmation popup before removing provider credentials.
+    pub(crate) fn show_remove_auth_confirmation(&mut self, provider: ProviderName) {
+        let name = auth_popup::provider_display_name(provider);
+        let app_tx = self.app_event_tx.clone();
+        let items = vec![
+            SelectionItem {
+                name: format!("Confirm: remove all {name} credentials"),
+                description: Some("This cannot be undone".to_string()),
+                actions: vec![Box::new(move |_tx| {
+                    app_tx.send(AppEvent::ExecuteRemoveProviderAuth { provider });
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Cancel".to_string(),
+                description: Some("Keep credentials unchanged".to_string()),
+                actions: vec![Box::new(move |_tx| {
+                    // No-op — popup dismisses on select.
+                })],
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some(format!("Remove {name} Credentials?")),
+            footer_hint: Some(crate::bottom_pane::popup_consts::standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
+        self.request_redraw();
+    }
+
+    /// Execute credential removal for a provider (after confirmation).
+    pub(crate) fn execute_remove_provider_auth(&mut self, provider: ProviderName) {
+        let name = auth_popup::provider_display_name(provider);
+        match orbit_code_core::auth::logout_provider(
+            &self.config.orbit_code_home,
+            provider,
+            self.config.cli_auth_credentials_store_mode,
+        ) {
+            Ok(removed) => {
+                self.auth_manager.reload();
+                let msg = if removed {
+                    format!("{name} credentials removed.")
+                } else {
+                    format!("No stored credentials found for {name}.")
+                };
+                self.add_info_message(msg, /*hint*/ None);
+            }
+            Err(e) => {
+                tracing::error!("failed to remove credentials for {provider}: {e}");
+                self.add_info_message(
+                    format!("Failed to remove credentials: {e}"),
+                    /*hint*/ None,
+                );
+            }
+        }
+    }
+
+    /// Apply a model switch with a cross-provider auth check.
+    /// If the target provider differs from the current provider, opens the auth
+    /// popup. Otherwise applies directly.
+    pub(crate) fn apply_model_with_auth_check(
+        &mut self,
+        model: String,
+        effort: Option<ReasoningEffortConfig>,
+    ) {
+        let target_provider = auth_popup::provider_for_model(&model);
+        let current_provider = auth_popup::provider_for_model(self.current_model());
+        if target_provider != current_provider {
+            auth_popup::open_auth_popup(
+                self,
+                target_provider,
+                model,
+                effort,
+                /*is_standalone*/ false,
+            );
+        } else {
+            self.apply_model_and_effort(model, effort);
+        }
+    }
+
     /// Open a popup to choose a quick auto model. Selecting "All models"
     /// opens the full picker with every available preset.
     pub(crate) fn open_model_popup(&mut self) {
@@ -6755,9 +6853,7 @@ impl ChatWidget {
                 return;
             }
 
-            tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-            tx.send(AppEvent::UpdateReasoningEffort(effort_for_action));
-            tx.send(AppEvent::PersistModelSelection {
+            tx.send(AppEvent::ApplyModelWithAuthCheck {
                 model: model_for_action.clone(),
                 effort: effort_for_action,
             });
@@ -6789,6 +6885,20 @@ impl ChatWidget {
         model: String,
         effort: Option<ReasoningEffortConfig>,
     ) {
+        // Check if switching providers — show auth popup instead of plan scope.
+        let target_provider = auth_popup::provider_for_model(&model);
+        let current_provider = auth_popup::provider_for_model(self.current_model());
+        if target_provider != current_provider {
+            auth_popup::open_auth_popup(
+                self,
+                target_provider,
+                model,
+                effort,
+                /*is_standalone*/ false,
+            );
+            return;
+        }
+
         let reasoning_phrase = match effort {
             Some(ReasoningEffortConfig::None) => "no reasoning".to_string(),
             Some(selected_effort) => {
@@ -6928,7 +7038,20 @@ impl ChatWidget {
                         effort: selected_effort,
                     });
             } else {
-                self.apply_model_and_effort(selected_model, selected_effort);
+                // Check if switching providers — show auth popup if so.
+                let target_provider = auth_popup::provider_for_model(&selected_model);
+                let current_provider = auth_popup::provider_for_model(self.current_model());
+                if target_provider != current_provider {
+                    auth_popup::open_auth_popup(
+                        self,
+                        target_provider,
+                        selected_model,
+                        selected_effort,
+                        /*is_standalone*/ false,
+                    );
+                } else {
+                    self.apply_model_and_effort(selected_model, selected_effort);
+                }
             }
             return;
         }
@@ -7003,9 +7126,7 @@ impl ChatWidget {
                         effort: choice_effort,
                     });
                 } else {
-                    tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                    tx.send(AppEvent::UpdateReasoningEffort(choice_effort));
-                    tx.send(AppEvent::PersistModelSelection {
+                    tx.send(AppEvent::ApplyModelWithAuthCheck {
                         model: model_for_action.clone(),
                         effort: choice_effort,
                     });

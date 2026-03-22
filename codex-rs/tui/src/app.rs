@@ -2794,6 +2794,18 @@ impl App {
             AppEvent::OpenAllModelsPopup { models } => {
                 self.chat_widget.open_all_models_popup(models);
             }
+            AppEvent::ManageAuthProvider { provider } => {
+                self.chat_widget.open_auth_provider_management(provider);
+            }
+            AppEvent::ConfirmRemoveProviderAuth { provider } => {
+                self.chat_widget.show_remove_auth_confirmation(provider);
+            }
+            AppEvent::ExecuteRemoveProviderAuth { provider } => {
+                self.chat_widget.execute_remove_provider_auth(provider);
+            }
+            AppEvent::ApplyModelWithAuthCheck { model, effort } => {
+                self.chat_widget.apply_model_with_auth_check(model, effort);
+            }
             AppEvent::OpenFullAccessConfirmation {
                 preset,
                 return_to_permissions,

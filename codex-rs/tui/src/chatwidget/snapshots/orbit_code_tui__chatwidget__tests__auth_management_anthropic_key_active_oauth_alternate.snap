@@ -1,0 +1,13 @@
+---
+source: tui/src/chatwidget/tests.rs
+expression: popup
+---
+  Manage Anthropic Authentication
+
+› 1. API Key: sk-ant-*******def (active) (current)  Currently in use
+  2. OAuth (Anthropic) (stored)                     Switch to this credential
+  3. Enter new API Key                              Run: just codex login --provider anthropic
+  4. OAuth Login                                    Sign in with your Anthropic account
+  5. Remove credentials                             Delete all stored Anthropic credentials
+
+  Press enter to confirm or esc to go back

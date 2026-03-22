@@ -106,6 +106,16 @@ pub struct AuthDotJsonV2 {
 
     /// Provider-keyed auth credentials.
     pub providers: HashMap<ProviderName, ProviderAuth>,
+
+    /// Stored-but-inactive credential per provider. When user switches
+    /// auth method, the old credential moves here from `providers`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub alternate_credentials: HashMap<ProviderName, ProviderAuth>,
+
+    /// Last-used auth method per provider. Determines pre-highlight
+    /// in the auth popup and credential resolution order.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub preferred_auth_modes: HashMap<ProviderName, AuthMode>,
 }
 
 impl AuthDotJsonV2 {
@@ -113,6 +123,8 @@ impl AuthDotJsonV2 {
         Self {
             version: 2,
             providers: HashMap::new(),
+            alternate_credentials: HashMap::new(),
+            preferred_auth_modes: HashMap::new(),
         }
     }
 
@@ -122,8 +134,21 @@ impl AuthDotJsonV2 {
     }
 
     /// Set auth for a specific provider (does not affect other providers).
+    ///
+    /// When the new credential has a DIFFERENT auth method type than the
+    /// existing one (e.g., API key → OAuth), the old credential is
+    /// auto-moved to `alternate_credentials`. Same-method rewrites
+    /// (e.g., OAuth token refresh, API key rotation) replace in place
+    /// without touching the alternate.
     pub fn set_provider_auth(&mut self, provider: ProviderName, auth: ProviderAuth) {
-        self.providers.insert(provider, auth);
+        let new_discriminant = std::mem::discriminant(&auth);
+        if let Some(old) = self.providers.insert(provider, auth) {
+            // Only preserve as alternate when the auth method type changes.
+            // Same-method rewrites (OAuth refresh, key rotation) replace in place.
+            if std::mem::discriminant(&old) != new_discriminant {
+                self.alternate_credentials.insert(provider, old);
+            }
+        }
     }
 
     /// Remove auth for a specific provider.
@@ -131,9 +156,30 @@ impl AuthDotJsonV2 {
         self.providers.remove(&provider)
     }
 
+    /// Restore the alternate credential as active. The current active
+    /// credential moves to alternate. Returns true if a swap occurred.
+    pub fn restore_alternate_credential(&mut self, provider: ProviderName) -> bool {
+        if let Some(alternate) = self.alternate_credentials.remove(&provider) {
+            if let Some(current) = self.providers.remove(&provider) {
+                self.alternate_credentials.insert(provider, current);
+            }
+            self.providers.insert(provider, alternate);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove all credentials for a provider (active + alternate + preference).
+    pub fn remove_all_credentials(&mut self, provider: ProviderName) {
+        self.providers.remove(&provider);
+        self.alternate_credentials.remove(&provider);
+        self.preferred_auth_modes.remove(&provider);
+    }
+
     /// Check if any provider has stored credentials.
     pub fn has_any_auth(&self) -> bool {
-        !self.providers.is_empty()
+        !self.providers.is_empty() || !self.alternate_credentials.is_empty()
     }
 }
 
@@ -283,7 +329,10 @@ pub(crate) trait AuthStorageBackend: Debug + Send + Sync {
     /// Delete auth for a single provider, preserving others.
     fn delete_provider(&self, provider: ProviderName) -> std::io::Result<bool> {
         if let Some(mut v2) = self.load()? {
-            let removed = v2.remove_provider_auth(provider).is_some();
+            let removed_active = v2.remove_provider_auth(provider).is_some();
+            let removed_alt = v2.alternate_credentials.remove(&provider).is_some();
+            v2.preferred_auth_modes.remove(&provider);
+            let removed = removed_active || removed_alt;
             if removed {
                 if v2.has_any_auth() {
                     self.save(&v2)?;

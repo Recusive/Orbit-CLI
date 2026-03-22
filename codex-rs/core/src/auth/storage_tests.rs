@@ -628,3 +628,186 @@ fn to_v1_openai_roundtrip() -> anyhow::Result<()> {
     assert_eq!(v1, back_to_v1);
     Ok(())
 }
+
+// ── alternate_credentials / preferred_auth_modes tests ──
+
+#[test]
+fn alternate_credentials_and_preferred_modes_round_trip() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-active".to_string(),
+        },
+    );
+    v2.alternate_credentials.insert(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    v2.preferred_auth_modes
+        .insert(ProviderName::Anthropic, AuthMode::AnthropicApiKey);
+
+    let json = serde_json::to_string_pretty(&v2).expect("serialize");
+    let loaded = deserialize_auth(&json).expect("deserialize");
+
+    assert_eq!(
+        loaded.provider_auth(ProviderName::Anthropic),
+        v2.provider_auth(ProviderName::Anthropic)
+    );
+    assert_eq!(
+        loaded.alternate_credentials.get(&ProviderName::Anthropic),
+        v2.alternate_credentials.get(&ProviderName::Anthropic)
+    );
+    assert_eq!(
+        loaded.preferred_auth_modes.get(&ProviderName::Anthropic),
+        Some(&AuthMode::AnthropicApiKey)
+    );
+}
+
+#[test]
+fn set_provider_auth_preserves_old_on_method_switch() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-old".to_string(),
+        },
+    );
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+
+    // Active should be OAuth
+    assert!(matches!(
+        v2.provider_auth(ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicOAuth { .. })
+    ));
+    // Old API key should be in alternate
+    assert!(matches!(
+        v2.alternate_credentials.get(&ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicApiKey { .. })
+    ));
+}
+
+#[test]
+fn set_provider_auth_same_method_rewrite_preserves_alternate() {
+    let mut v2 = AuthDotJsonV2::new();
+    // Set API key, then switch to OAuth (API key moves to alternate)
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-key".to_string(),
+        },
+    );
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at-old".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    // Now simulate OAuth refresh — same method type, new token
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at-refreshed".to_string(),
+            refresh_token: "rt-new".to_string(),
+            expires_at: 2000,
+        },
+    );
+
+    // Active should be refreshed OAuth
+    if let Some(ProviderAuth::AnthropicOAuth { access_token, .. }) =
+        v2.provider_auth(ProviderName::Anthropic)
+    {
+        assert_eq!(access_token, "at-refreshed");
+    } else {
+        panic!("expected AnthropicOAuth");
+    }
+    // Alternate should still be the original API key (NOT the old OAuth)
+    assert!(matches!(
+        v2.alternate_credentials.get(&ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicApiKey { .. })
+    ));
+}
+
+#[test]
+fn v2_without_new_fields_deserializes_with_empty_defaults() {
+    let json = r#"{"version":2,"providers":{}}"#;
+    let v2 = deserialize_auth(json).expect("deserialize");
+    assert!(v2.alternate_credentials.is_empty());
+    assert!(v2.preferred_auth_modes.is_empty());
+}
+
+#[test]
+fn restore_alternate_swaps_back() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-key".to_string(),
+        },
+    );
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    // Restore: API key should become active again, OAuth moves to alternate
+    v2.restore_alternate_credential(ProviderName::Anthropic);
+
+    assert!(matches!(
+        v2.provider_auth(ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicApiKey { .. })
+    ));
+    assert!(matches!(
+        v2.alternate_credentials.get(&ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicOAuth { .. })
+    ));
+}
+
+#[test]
+fn remove_all_credentials_clears_everything() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey {
+            key: "sk-ant-key".to_string(),
+        },
+    );
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    v2.preferred_auth_modes
+        .insert(ProviderName::Anthropic, AuthMode::AnthropicOAuth);
+
+    v2.remove_all_credentials(ProviderName::Anthropic);
+
+    assert!(v2.provider_auth(ProviderName::Anthropic).is_none());
+    assert!(
+        !v2.alternate_credentials
+            .contains_key(&ProviderName::Anthropic)
+    );
+    assert!(
+        !v2.preferred_auth_modes
+            .contains_key(&ProviderName::Anthropic)
+    );
+}

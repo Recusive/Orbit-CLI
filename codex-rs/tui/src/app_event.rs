@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 
+use orbit_code_core::auth::ProviderName;
 use orbit_code_core::connectors::AppInfo;
 use orbit_code_file_search::FileMatch;
 use orbit_code_protocol::ThreadId;
@@ -194,6 +195,14 @@ pub(crate) enum AppEvent {
         effort: Option<ReasoningEffort>,
     },
 
+    /// Apply a model switch with a cross-provider auth check.
+    /// If the target model's provider differs from the current provider,
+    /// opens the auth popup instead of applying directly.
+    ApplyModelWithAuthCheck {
+        model: String,
+        effort: Option<ReasoningEffort>,
+    },
+
     /// Persist the selected personality to the appropriate config.
     PersistPersonalitySelection {
         personality: Personality,
@@ -238,6 +247,21 @@ pub(crate) enum AppEvent {
     /// Open the full model picker (non-auto models).
     OpenAllModelsPopup {
         models: Vec<ModelPreset>,
+    },
+
+    /// Open the auth management popup for a specific provider (from /auth).
+    ManageAuthProvider {
+        provider: ProviderName,
+    },
+
+    /// Show a confirmation popup before removing provider credentials.
+    ConfirmRemoveProviderAuth {
+        provider: ProviderName,
+    },
+
+    /// Actually remove provider credentials (after confirmation).
+    ExecuteRemoveProviderAuth {
+        provider: ProviderName,
     },
 
     /// Open the confirmation prompt before enabling full access mode.

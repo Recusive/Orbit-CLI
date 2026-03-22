@@ -2570,15 +2570,9 @@ async fn reasoning_selection_in_plan_mode_without_effort_change_does_not_open_sc
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::UpdateModel(model) if model == "gpt-5.1-codex-max"
+            AppEvent::ApplyModelWithAuthCheck { model, .. } if model == "gpt-5.1-codex-max"
         )),
-        "expected model update event; events: {events:?}"
-    );
-    assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, AppEvent::UpdateReasoningEffort(Some(_)))),
-        "expected reasoning update event; events: {events:?}"
+        "expected model auth-check event; events: {events:?}"
     );
 }
 
@@ -2655,15 +2649,9 @@ async fn reasoning_selection_in_plan_mode_model_switch_does_not_open_scope_promp
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::UpdateModel(model) if model == "gpt-5"
+            AppEvent::ApplyModelWithAuthCheck { model, .. } if model == "gpt-5"
         )),
-        "expected model update event; events: {events:?}"
-    );
-    assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, AppEvent::UpdateReasoningEffort(Some(_)))),
-        "expected reasoning update event; events: {events:?}"
+        "expected model auth-check event; events: {events:?}"
     );
 }
 
@@ -11236,4 +11224,169 @@ async fn review_queues_user_messages_snapshot() {
     })
     .unwrap();
     assert_snapshot!(term.backend().vt100().screen().contents());
+}
+
+// ── Auth popup snapshot tests ──────────────────────────────────────
+
+/// Helper: create a ChatWidget with a dedicated temp dir for auth storage.
+async fn make_chatwidget_with_auth_home(
+    auth_home: &std::path::Path,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<Op>,
+) {
+    let (mut chat, rx, op_rx) = make_chatwidget_manual(None).await;
+    chat.config.orbit_code_home = auth_home.to_path_buf();
+    chat.config.cli_auth_credentials_store_mode =
+        orbit_code_core::auth::AuthCredentialsStoreMode::File;
+    chat.thread_id = Some(ThreadId::new());
+    (chat, rx, op_rx)
+}
+
+#[tokio::test]
+async fn auth_status_popup_opens_without_credentials() {
+    let tmp = tempdir().unwrap();
+    let (mut chat, _rx, _op_rx) = make_chatwidget_with_auth_home(tmp.path()).await;
+
+    chat.on_slash_auth();
+
+    // Verify popup opened (env-var-dependent content makes snapshot non-deterministic,
+    // so we verify structurally rather than with a snapshot).
+    let popup = render_bottom_popup(&chat, 80);
+    assert!(
+        popup.contains("Authentication Status"),
+        "expected auth status title in popup, got: {popup}"
+    );
+    assert!(
+        popup.contains("Manage OpenAI"),
+        "expected OpenAI provider entry"
+    );
+    assert!(
+        popup.contains("Manage Anthropic"),
+        "expected Anthropic provider entry"
+    );
+}
+
+#[tokio::test]
+async fn auth_provider_management_api_key_active_with_alternate() {
+    let tmp = tempdir().unwrap();
+
+    // Write auth storage with active API key + OAuth alternate for Anthropic.
+    {
+        use orbit_code_core::auth::AuthCredentialsStoreMode;
+        use orbit_code_core::auth::AuthDotJsonV2;
+        use orbit_code_core::auth::ProviderAuth;
+        use orbit_code_core::auth::ProviderName;
+        use orbit_code_core::auth::save_auth_v2;
+
+        let mut v2 = AuthDotJsonV2::new();
+        v2.providers.insert(
+            ProviderName::Anthropic,
+            ProviderAuth::AnthropicApiKey {
+                key: "sk-ant-api03-test1234567890abcdef".to_string(),
+            },
+        );
+        v2.alternate_credentials.insert(
+            ProviderName::Anthropic,
+            ProviderAuth::AnthropicOAuth {
+                access_token: "oauth-token".to_string(),
+                refresh_token: "refresh-token".to_string(),
+                expires_at: 9999999999,
+            },
+        );
+        save_auth_v2(tmp.path(), &v2, AuthCredentialsStoreMode::File).expect("save auth");
+    }
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_with_auth_home(tmp.path()).await;
+
+    // Test the management sub-popup directly (deterministic, no env var dependency).
+    chat.open_auth_provider_management(orbit_code_core::auth::ProviderName::Anthropic);
+
+    let popup = render_bottom_popup(&chat, 100);
+    assert_snapshot!(
+        "auth_management_anthropic_key_active_oauth_alternate",
+        popup
+    );
+}
+
+#[tokio::test]
+async fn auth_provider_management_popup_with_active_and_alternate() {
+    let tmp = tempdir().unwrap();
+
+    {
+        use orbit_code_core::auth::AuthCredentialsStoreMode;
+        use orbit_code_core::auth::AuthDotJsonV2;
+        use orbit_code_core::auth::ProviderAuth;
+        use orbit_code_core::auth::ProviderName;
+        use orbit_code_core::auth::save_auth_v2;
+
+        let mut v2 = AuthDotJsonV2::new();
+        v2.providers.insert(
+            ProviderName::OpenAI,
+            ProviderAuth::OpenAiApiKey {
+                key: "sk-proj-test1234567890abcdef".to_string(),
+            },
+        );
+        v2.alternate_credentials.insert(
+            ProviderName::OpenAI,
+            ProviderAuth::OpenAiApiKey {
+                key: "sk-proj-alt99887766554433ab".to_string(),
+            },
+        );
+        save_auth_v2(tmp.path(), &v2, AuthCredentialsStoreMode::File).expect("save auth");
+    }
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_with_auth_home(tmp.path()).await;
+
+    chat.open_auth_provider_management(orbit_code_core::auth::ProviderName::OpenAI);
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("auth_provider_management_with_active_and_alternate", popup);
+}
+
+#[tokio::test]
+async fn model_switch_auth_popup_active_credential() {
+    let tmp = tempdir().unwrap();
+
+    {
+        use orbit_code_core::auth::AuthCredentialsStoreMode;
+        use orbit_code_core::auth::AuthDotJsonV2;
+        use orbit_code_core::auth::ProviderAuth;
+        use orbit_code_core::auth::ProviderName;
+        use orbit_code_core::auth::save_auth_v2;
+
+        let mut v2 = AuthDotJsonV2::new();
+        v2.providers.insert(
+            ProviderName::Anthropic,
+            ProviderAuth::AnthropicApiKey {
+                key: "sk-ant-api03-test1234567890abcdef".to_string(),
+            },
+        );
+        save_auth_v2(tmp.path(), &v2, AuthCredentialsStoreMode::File).expect("save auth");
+    }
+
+    let (mut chat, _rx, _op_rx) = make_chatwidget_with_auth_home(tmp.path()).await;
+
+    super::auth_popup::open_auth_popup(
+        &mut chat,
+        orbit_code_core::auth::ProviderName::Anthropic,
+        "claude-sonnet-4-20250514".to_string(),
+        None,
+        /*is_standalone*/ false,
+    );
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("model_switch_auth_popup_active_credential", popup);
+}
+
+#[tokio::test]
+async fn auth_remove_credentials_confirmation_popup() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(None).await;
+    chat.thread_id = Some(ThreadId::new());
+
+    chat.show_remove_auth_confirmation(orbit_code_core::auth::ProviderName::Anthropic);
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert_snapshot!("auth_remove_credentials_confirmation", popup);
 }

@@ -1,0 +1,17 @@
+---
+source: tui/src/chatwidget/tests.rs
+expression: popup
+---
+  Manage OpenAI Authentication
+
+› 1. API Key: sk-proj*******def (active) (current)  Currently in use
+  2. API Key: sk-proj*******3ab (stored)            Switch to this credential
+  3. Enter new API Key                              Run: printenv
+                                                    OPENAI_API_KEY | just
+                                                    codex login --with-api-key
+  4. OAuth Login                                    Sign in with your OpenAI
+                                                    account
+  5. Remove credentials                             Delete all stored OpenAI
+                                                    credentials
+
+  Press enter to confirm or esc to go back

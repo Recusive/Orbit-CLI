@@ -120,6 +120,16 @@ pub fn save_auth_v2(
             for (provider, provider_auth) in &auth.providers {
                 existing.set_provider_auth(*provider, provider_auth.clone());
             }
+            // Merge alternate_credentials
+            for (provider, alt_auth) in &auth.alternate_credentials {
+                existing
+                    .alternate_credentials
+                    .insert(*provider, alt_auth.clone());
+            }
+            // Merge preferred_auth_modes
+            for (provider, mode) in &auth.preferred_auth_modes {
+                existing.preferred_auth_modes.insert(*provider, *mode);
+            }
             existing
         }
         Ok(None) | Err(_) => auth.clone(),
@@ -355,6 +365,20 @@ pub(crate) fn persist_tokens(
     }
     storage.save(&v2)?;
     Ok(auth_dot_json)
+}
+
+/// Determine the AuthMode that corresponds to a given ProviderAuth variant.
+pub(crate) fn auth_mode_for_provider_auth(
+    auth: &ProviderAuth,
+) -> orbit_code_app_server_protocol::AuthMode {
+    use orbit_code_app_server_protocol::AuthMode as ApiAuthMode;
+    match auth {
+        ProviderAuth::OpenAiApiKey { .. } => ApiAuthMode::ApiKey,
+        ProviderAuth::Chatgpt { .. } => ApiAuthMode::Chatgpt,
+        ProviderAuth::ChatgptAuthTokens { .. } => ApiAuthMode::ChatgptAuthTokens,
+        ProviderAuth::AnthropicApiKey { .. } => ApiAuthMode::AnthropicApiKey,
+        ProviderAuth::AnthropicOAuth { .. } => ApiAuthMode::AnthropicOAuth,
+    }
 }
 
 /// Convert a ProviderAuth entry from storage to a CodexAuth instance.
