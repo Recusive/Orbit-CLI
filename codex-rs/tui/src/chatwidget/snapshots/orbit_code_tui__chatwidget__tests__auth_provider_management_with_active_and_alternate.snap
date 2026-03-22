@@ -6,12 +6,14 @@ expression: popup
 
 › 1. API Key: sk-proj*******def (active) (current)  Currently in use
   2. API Key: sk-proj*******3ab (stored)            Switch to this credential
-  3. Enter new API Key                              Run: printenv
-                                                    OPENAI_API_KEY | just
-                                                    codex login --with-api-key
-  4. OAuth Login                                    Sign in with your OpenAI
-                                                    account
-  5. Remove credentials                             Delete all stored OpenAI
+  3. Enter new API Key                              Paste or type a new API
+                                                    key
+  4. Sign in with ChatGPT                           Opens your browser for
+                                                    ChatGPT sign-in
+  5. Sign in with Device Code                       Sign in from another
+                                                    device with a one-time
+                                                    code
+  6. Remove credentials                             Delete all stored OpenAI
                                                     credentials
 
   Press enter to confirm or esc to go back

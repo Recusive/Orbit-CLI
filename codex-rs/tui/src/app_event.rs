@@ -264,6 +264,29 @@ pub(crate) enum AppEvent {
         provider: ProviderName,
     },
 
+    /// Launch inline API key entry for a provider.
+    LaunchApiKeyEntry {
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    },
+
+    /// Launch browser-based ChatGPT OAuth login.
+    LaunchOpenAiBrowserLogin {
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    },
+
+    /// Launch device-code ChatGPT login.
+    LaunchOpenAiDeviceCodeLogin {
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    },
+
+    /// Launch Anthropic OAuth code-paste flow.
+    LaunchAnthropicOAuth {
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    },
+
+    /// An async auth flow task completed — poll the active view for results.
+    AuthFlowAsyncUpdate,
+
     /// Open the confirmation prompt before enabling full access mode.
     OpenFullAccessConfirmation {
         preset: ApprovalPreset,

@@ -61,6 +61,15 @@ pub(crate) trait BottomPaneView: Renderable {
         false
     }
 
+    /// Poll for asynchronous state changes (e.g., auth flow completion).
+    ///
+    /// Called by the app event loop when an async background task signals
+    /// that new data is available. Returns `true` if state changed and a
+    /// redraw is needed.
+    fn poll_async_state(&mut self) -> bool {
+        false
+    }
+
     /// Try to handle approval request; return the original value if not
     /// consumed.
     fn try_consume_approval_request(

@@ -6364,6 +6364,113 @@ impl ChatWidget {
         }
     }
 
+    /// Launch an inline API key entry view.
+    pub(crate) fn launch_api_key_entry(
+        &mut self,
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    ) {
+        use crate::bottom_pane::auth_flow_view::AuthFlowView;
+
+        let view = AuthFlowView::new_api_key_entry(
+            context.clone(),
+            self.config.orbit_code_home.to_path_buf(),
+            self.config.cli_auth_credentials_store_mode,
+            self.auth_manager.clone(),
+            self.app_event_tx.clone(),
+        );
+
+        self.push_auth_flow_view(context, Box::new(view));
+    }
+
+    /// Launch browser-based ChatGPT OAuth login.
+    pub(crate) fn launch_openai_browser_login(
+        &mut self,
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    ) {
+        use crate::bottom_pane::auth_flow_view::AuthFlowView;
+
+        match AuthFlowView::new_openai_browser_login(
+            context.clone(),
+            self.config.orbit_code_home.to_path_buf(),
+            self.config.cli_auth_credentials_store_mode,
+            self.auth_manager.clone(),
+            self.app_event_tx.clone(),
+            self.config.forced_chatgpt_workspace_id.clone(),
+        ) {
+            Ok(view) => self.push_auth_flow_view(context, Box::new(view)),
+            Err(e) => {
+                self.add_info_message(format!("Failed to start browser login: {e}"), None);
+            }
+        }
+    }
+
+    /// Launch device-code ChatGPT login.
+    pub(crate) fn launch_openai_device_code_login(
+        &mut self,
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    ) {
+        use crate::bottom_pane::auth_flow_view::AuthFlowView;
+
+        match AuthFlowView::new_openai_device_code_login(
+            context.clone(),
+            self.config.orbit_code_home.to_path_buf(),
+            self.config.cli_auth_credentials_store_mode,
+            self.auth_manager.clone(),
+            self.app_event_tx.clone(),
+            self.config.forced_chatgpt_workspace_id.clone(),
+        ) {
+            Ok(view) => self.push_auth_flow_view(context, Box::new(view)),
+            Err(e) => {
+                self.add_info_message(format!("Failed to start device code login: {e}"), None);
+            }
+        }
+    }
+
+    /// Launch Anthropic OAuth code-paste flow.
+    pub(crate) fn launch_anthropic_oauth(
+        &mut self,
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+    ) {
+        use crate::bottom_pane::auth_flow_view::AuthFlowView;
+
+        match AuthFlowView::new_anthropic_oauth(
+            context.clone(),
+            self.config.orbit_code_home.to_path_buf(),
+            self.config.cli_auth_credentials_store_mode,
+            self.auth_manager.clone(),
+            self.app_event_tx.clone(),
+        ) {
+            Ok(view) => self.push_auth_flow_view(context, Box::new(view)),
+            Err(e) => {
+                self.add_info_message(format!("Failed to start OAuth: {e}"), None);
+            }
+        }
+    }
+
+    /// Push or replace view based on launch context.
+    fn push_auth_flow_view(
+        &mut self,
+        context: crate::bottom_pane::auth_flow_view::AuthLaunchContext,
+        view: Box<crate::bottom_pane::auth_flow_view::AuthFlowView>,
+    ) {
+        match context {
+            crate::bottom_pane::auth_flow_view::AuthLaunchContext::ManageProvider { .. } => {
+                // Push above the existing provider-management popup.
+                self.bottom_pane.show_view(view);
+            }
+            crate::bottom_pane::auth_flow_view::AuthLaunchContext::ModelSwitch { .. } => {
+                // Replace all popups so Esc returns to composer.
+                self.bottom_pane.replace_all_views(view);
+            }
+        }
+        self.request_redraw();
+    }
+
+    /// Poll the active auth flow view for async state changes.
+    pub(crate) fn poll_auth_flow_async(&mut self) {
+        self.bottom_pane.poll_active_view_async();
+    }
+
     /// Open a popup to choose a quick auto model. Selecting "All models"
     /// opens the full picker with every available preset.
     pub(crate) fn open_model_popup(&mut self) {

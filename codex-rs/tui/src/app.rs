@@ -2803,6 +2803,21 @@ impl App {
             AppEvent::ExecuteRemoveProviderAuth { provider } => {
                 self.chat_widget.execute_remove_provider_auth(provider);
             }
+            AppEvent::LaunchApiKeyEntry { context } => {
+                self.chat_widget.launch_api_key_entry(context);
+            }
+            AppEvent::LaunchOpenAiBrowserLogin { context } => {
+                self.chat_widget.launch_openai_browser_login(context);
+            }
+            AppEvent::LaunchOpenAiDeviceCodeLogin { context } => {
+                self.chat_widget.launch_openai_device_code_login(context);
+            }
+            AppEvent::LaunchAnthropicOAuth { context } => {
+                self.chat_widget.launch_anthropic_oauth(context);
+            }
+            AppEvent::AuthFlowAsyncUpdate => {
+                self.chat_widget.poll_auth_flow_async();
+            }
             AppEvent::ApplyModelWithAuthCheck { model, effort } => {
                 self.chat_widget.apply_model_with_auth_check(model, effort);
             }

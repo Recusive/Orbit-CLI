@@ -43,6 +43,7 @@ use std::time::Duration;
 
 mod app_link_view;
 mod approval_overlay;
+pub(crate) mod auth_flow_view;
 mod mcp_server_elicitation;
 mod multi_select_picker;
 mod request_user_input;
@@ -785,6 +786,16 @@ impl BottomPane {
         self.push_view(Box::new(view));
     }
 
+    /// Replace all active views with the given view.
+    ///
+    /// Used when the new view should not stack above existing popups.
+    /// For example, the `/model` auth flow replaces the model-selection
+    /// popup so that Esc returns to the composer, not the model picker.
+    pub(crate) fn replace_all_views(&mut self, view: Box<dyn BottomPaneView>) {
+        self.view_stack.clear();
+        self.push_view(view);
+    }
+
     /// Replace the active selection view when it matches `view_id`.
     pub(crate) fn replace_selection_view_if_active(
         &mut self,
@@ -1052,6 +1063,33 @@ impl BottomPane {
 
     pub(crate) fn request_redraw_in(&self, dur: Duration) {
         self.frame_requester.schedule_frame_in(dur);
+    }
+
+    /// Poll the active view for async state changes and handle completion.
+    ///
+    /// Called when a background task signals that new data is available.
+    /// Returns `true` if the view's state changed.
+    pub(crate) fn poll_active_view_async(&mut self) -> bool {
+        let changed = if let Some(view) = self.view_stack.last_mut() {
+            view.poll_async_state()
+        } else {
+            false
+        };
+
+        // If the view completed itself during polling, clean up the stack.
+        if self
+            .view_stack
+            .last()
+            .is_some_and(|view| view.is_complete())
+        {
+            self.view_stack.clear();
+            self.on_active_view_complete();
+        }
+
+        if changed {
+            self.request_redraw();
+        }
+        changed
     }
 
     // --- History helpers ---

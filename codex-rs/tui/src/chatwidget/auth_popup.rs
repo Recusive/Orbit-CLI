@@ -5,6 +5,7 @@
 
 use orbit_code_app_server_protocol::AuthMode;
 use orbit_code_core::auth::AuthDotJsonV2;
+use orbit_code_core::auth::CodexAuth;
 use orbit_code_core::auth::ProviderAuth;
 use orbit_code_core::auth::ProviderName;
 use orbit_code_core::auth::load_auth_dot_json_v2;
@@ -15,6 +16,7 @@ use orbit_code_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig
 use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
+use crate::bottom_pane::auth_flow_view::AuthLaunchContext;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
 use super::ChatWidget;
@@ -86,37 +88,86 @@ fn credential_summary(auth: &ProviderAuth) -> String {
     }
 }
 
+/// Which source `AuthManager` resolved as the effective credential.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EffectiveAuthSource {
+    /// The `providers` (active stored) entry is effective.
+    Active,
+    /// The `alternate_credentials` entry is effective.
+    Alternate,
+    /// An env var is effective (no stored credential matches).
+    EnvVar,
+    /// No effective auth at all.
+    None,
+}
+
+/// Determine which source `AuthManager` resolved for the given provider.
+fn effective_auth_source(
+    effective: Option<&CodexAuth>,
+    active: Option<&ProviderAuth>,
+    alternate: Option<&ProviderAuth>,
+) -> EffectiveAuthSource {
+    let Some(eff) = effective else {
+        return EffectiveAuthSource::None;
+    };
+    let eff_mode = eff.api_auth_mode();
+
+    if let Some(a) = active
+        && auth_mode_for_provider_auth(a) == eff_mode
+    {
+        return EffectiveAuthSource::Active;
+    }
+    if let Some(alt) = alternate
+        && auth_mode_for_provider_auth(alt) == eff_mode
+    {
+        return EffectiveAuthSource::Alternate;
+    }
+    // Effective auth exists but doesn't match any stored credential → env var.
+    EffectiveAuthSource::EnvVar
+}
+
 /// Build the status description for a provider in the `/auth` overview.
-///
-/// `has_effective_auth` indicates whether `AuthManager` resolved effective
-/// auth for this provider (from any source: stored, alternate, or env var).
-/// `env_present` indicates whether the provider's env var is set.
 fn provider_status_description(
     provider: ProviderName,
     active: Option<&ProviderAuth>,
     alternate: Option<&ProviderAuth>,
-    has_effective_auth: bool,
+    source: EffectiveAuthSource,
     env_present: bool,
 ) -> String {
     let env_var_name = env_var_for_provider(provider);
-
     let mut parts = Vec::new();
 
     if let Some(a) = active {
-        parts.push(format!("{} (active)", credential_summary(a)));
+        let label = if source == EffectiveAuthSource::Active {
+            "active"
+        } else {
+            "stored"
+        };
+        parts.push(format!("{} ({label})", credential_summary(a)));
     }
     if let Some(alt) = alternate {
-        parts.push(format!("{} (stored)", credential_summary(alt)));
+        let label = if source == EffectiveAuthSource::Alternate {
+            "active"
+        } else {
+            "stored"
+        };
+        parts.push(format!("{} ({label})", credential_summary(alt)));
     }
     if env_present {
         if active.is_none() && alternate.is_none() {
-            if has_effective_auth {
-                parts.push(format!("API Key (active via {env_var_name})"));
+            let label = if source == EffectiveAuthSource::EnvVar {
+                "active"
             } else {
-                parts.push(format!("{env_var_name} (set but not effective)"));
-            }
+                "set"
+            };
+            parts.push(format!("{env_var_name} ({label})"));
         } else {
-            parts.push(format!("{env_var_name} (env)"));
+            let label = if source == EffectiveAuthSource::EnvVar {
+                "active"
+            } else {
+                "env"
+            };
+            parts.push(format!("{env_var_name} ({label})"));
         }
     }
 
@@ -154,21 +205,14 @@ pub(super) fn on_slash_auth(widget: &mut ChatWidget) {
         let alternate = v2.alternate_credentials.get(&provider);
 
         // Use AuthManager as the source of truth for effective auth.
-        let has_effective_auth = widget
-            .auth_manager
-            .auth_cached_for_provider(provider)
-            .is_some();
+        let effective = widget.auth_manager.auth_cached_for_provider(provider);
+        let source = effective_auth_source(effective.as_ref(), active, alternate);
         let env_present = std::env::var(env_var_for_provider(provider))
             .ok()
             .is_some_and(|v| !v.is_empty());
 
-        let description = provider_status_description(
-            provider,
-            active,
-            alternate,
-            has_effective_auth,
-            env_present,
-        );
+        let description =
+            provider_status_description(provider, active, alternate, source, env_present);
 
         let app_tx = widget.app_event_tx.clone();
 
@@ -290,46 +334,79 @@ pub(super) fn open_auth_provider_management(widget: &mut ChatWidget, provider: P
         });
     }
 
-    // "Enter new API Key" — Phase 2 placeholder with CLI instructions.
+    // "Enter new API Key" — inline API key entry.
+    // dismiss_on_select: false — the SelectionView stays in the stack so
+    // Esc from the auth flow reveals the provider-management popup.
     {
-        let cmd = login_command_for_provider(provider);
+        let ctx = AuthLaunchContext::ManageProvider { provider };
         let app_tx = widget.app_event_tx.clone();
         items.push(SelectionItem {
             name: "Enter new API Key".to_string(),
-            description: Some(format!("Run: {cmd}")),
+            description: Some("Paste or type a new API key".to_string()),
             actions: vec![Box::new(move |_tx| {
-                app_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    crate::history_cell::new_info_event(
-                        format!("To add a new API key, run:\n  {cmd}"),
-                        None,
-                    ),
-                )));
+                app_tx.send(AppEvent::LaunchApiKeyEntry {
+                    context: ctx.clone(),
+                });
             })],
-            dismiss_on_select: true,
+            dismiss_on_select: false,
             ..Default::default()
         });
     }
 
-    // "OAuth Login" — Phase 2 placeholder.
-    {
-        let app_tx = widget.app_event_tx.clone();
-        items.push(SelectionItem {
-            name: "OAuth Login".to_string(),
-            description: Some(format!("Sign in with your {name} account")),
-            actions: vec![Box::new(move |_tx| {
-                app_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    crate::history_cell::new_info_event(
-                        "Mid-session OAuth switching is not yet available. \
-                         Use /logout to clear current credentials, then restart \
-                         Orbit Code to reach the onboarding OAuth flow."
-                            .to_string(),
-                        None,
+    // Provider-specific OAuth options.
+    match provider {
+        ProviderName::OpenAI => {
+            // "Sign in with ChatGPT" — browser OAuth.
+            {
+                let ctx = AuthLaunchContext::ManageProvider { provider };
+                let app_tx = widget.app_event_tx.clone();
+                items.push(SelectionItem {
+                    name: "Sign in with ChatGPT".to_string(),
+                    description: Some("Opens your browser for ChatGPT sign-in".to_string()),
+                    actions: vec![Box::new(move |_tx| {
+                        app_tx.send(AppEvent::LaunchOpenAiBrowserLogin {
+                            context: ctx.clone(),
+                        });
+                    })],
+                    dismiss_on_select: false,
+                    ..Default::default()
+                });
+            }
+            // "Sign in with Device Code" — device code flow.
+            {
+                let ctx = AuthLaunchContext::ManageProvider { provider };
+                let app_tx = widget.app_event_tx.clone();
+                items.push(SelectionItem {
+                    name: "Sign in with Device Code".to_string(),
+                    description: Some(
+                        "Sign in from another device with a one-time code".to_string(),
                     ),
-                )));
-            })],
-            dismiss_on_select: true,
-            ..Default::default()
-        });
+                    actions: vec![Box::new(move |_tx| {
+                        app_tx.send(AppEvent::LaunchOpenAiDeviceCodeLogin {
+                            context: ctx.clone(),
+                        });
+                    })],
+                    dismiss_on_select: false,
+                    ..Default::default()
+                });
+            }
+        }
+        ProviderName::Anthropic => {
+            // "Sign in with Claude (OAuth)" — Anthropic OAuth.
+            let ctx = AuthLaunchContext::ManageProvider { provider };
+            let app_tx = widget.app_event_tx.clone();
+            items.push(SelectionItem {
+                name: "Sign in with Claude (OAuth)".to_string(),
+                description: Some("Opens your browser for code-paste sign-in".to_string()),
+                actions: vec![Box::new(move |_tx| {
+                    app_tx.send(AppEvent::LaunchAnthropicOAuth {
+                        context: ctx.clone(),
+                    });
+                })],
+                dismiss_on_select: false,
+                ..Default::default()
+            });
+        }
     }
 
     // "Remove credentials" — routes through confirmation popup.
@@ -388,20 +465,20 @@ pub(crate) fn open_auth_popup(
     let active = v2.provider_auth(target_provider).cloned();
     let alternate = v2.alternate_credentials.get(&target_provider).cloned();
 
-    // Use AuthManager as source of truth for whether effective auth exists.
-    let has_effective_auth = widget
+    // Use AuthManager as source of truth for effective auth.
+    let effective = widget
         .auth_manager
-        .auth_cached_for_provider(target_provider)
-        .is_some();
+        .auth_cached_for_provider(target_provider);
+    let source = effective_auth_source(effective.as_ref(), active.as_ref(), alternate.as_ref());
 
     // Fast path: effective auth exists but no stored credentials — env var is the source.
-    if active.is_none() && alternate.is_none() && has_effective_auth {
+    if active.is_none() && alternate.is_none() && source == EffectiveAuthSource::EnvVar {
         widget.apply_model_and_effort(selected_model, selected_effort);
         return;
     }
 
     // No auth at all — show info message with instructions.
-    if !has_effective_auth && active.is_none() && alternate.is_none() {
+    if source == EffectiveAuthSource::None && active.is_none() && alternate.is_none() {
         let cmd = login_command_for_provider(target_provider);
         widget.add_info_message(
             format!("No credentials found for {name}. Run: {cmd}"),
@@ -415,12 +492,14 @@ pub(crate) fn open_auth_popup(
     // Active stored credential.
     if let Some(ref cred) = active {
         let summary = credential_summary(cred);
+        let is_effective = source == EffectiveAuthSource::Active;
+        let label = if is_effective { "active" } else { "stored" };
         let model_clone = selected_model.clone();
         let effort_clone = selected_effort;
         let app_tx = widget.app_event_tx.clone();
         items.push(SelectionItem {
-            name: format!("{summary} (active)"),
-            description: Some("Use current credential".to_string()),
+            name: format!("{summary} ({label})"),
+            description: Some("Use this credential".to_string()),
             actions: vec![Box::new(move |_tx| {
                 app_tx.send(AppEvent::UpdateModel(model_clone.clone()));
                 app_tx.send(AppEvent::UpdateReasoningEffort(effort_clone));
@@ -430,7 +509,7 @@ pub(crate) fn open_auth_popup(
                 });
             })],
             dismiss_on_select: true,
-            is_current: true,
+            is_current: is_effective,
             ..Default::default()
         });
     }
@@ -438,6 +517,8 @@ pub(crate) fn open_auth_popup(
     // Alternate stored credential.
     if let Some(ref alt) = alternate {
         let summary = credential_summary(alt);
+        let is_effective = source == EffectiveAuthSource::Alternate;
+        let label = if is_effective { "active" } else { "stored" };
         let orbit_code_home = widget.config.orbit_code_home.clone();
         let store_mode = widget.config.cli_auth_credentials_store_mode;
         let model_clone = selected_model.clone();
@@ -446,8 +527,12 @@ pub(crate) fn open_auth_popup(
         let auth_manager = widget.auth_manager.clone();
         let alt_mode = auth_mode_for_provider_auth(alt);
         items.push(SelectionItem {
-            name: format!("{summary} (stored)"),
-            description: Some("Switch to stored credential".to_string()),
+            name: format!("{summary} ({label})"),
+            description: Some(if is_effective {
+                "Currently in use".to_string()
+            } else {
+                "Switch to this credential".to_string()
+            }),
             actions: vec![Box::new(move |_tx| {
                 let v2_result = load_auth_dot_json_v2(&orbit_code_home, store_mode);
                 match v2_result {
@@ -484,78 +569,121 @@ pub(crate) fn open_auth_popup(
                 }
             })],
             dismiss_on_select: true,
+            is_current: is_effective,
             ..Default::default()
         });
     }
 
-    // Env var credential — only shown when stored credentials also exist and
-    // AuthManager confirms the env var provides effective auth.
-    if has_effective_auth && (active.is_some() || alternate.is_some()) {
+    // Env var credential — only shown when the env var is the effective source
+    // AND stored credentials also exist (otherwise the fast path already applied).
+    if source == EffectiveAuthSource::EnvVar {
         let env_var_name = env_var_for_provider(target_provider);
-        let env_set = std::env::var(env_var_name)
-            .ok()
-            .is_some_and(|v| !v.is_empty());
-        if env_set {
-            let model_clone = selected_model;
-            let effort_clone = selected_effort;
-            let app_tx = widget.app_event_tx.clone();
-            items.push(SelectionItem {
-                name: format!("API Key (via {env_var_name})"),
-                description: Some("Use environment variable".to_string()),
-                actions: vec![Box::new(move |_tx| {
-                    app_tx.send(AppEvent::UpdateModel(model_clone.clone()));
-                    app_tx.send(AppEvent::UpdateReasoningEffort(effort_clone));
-                    app_tx.send(AppEvent::PersistModelSelection {
-                        model: model_clone.clone(),
-                        effort: effort_clone,
-                    });
-                })],
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
+        let model_clone = selected_model.clone();
+        let effort_clone = selected_effort;
+        let app_tx = widget.app_event_tx.clone();
+        items.push(SelectionItem {
+            name: format!("API Key (via {env_var_name})"),
+            description: Some("Use environment variable (currently active)".to_string()),
+            actions: vec![Box::new(move |_tx| {
+                app_tx.send(AppEvent::UpdateModel(model_clone.clone()));
+                app_tx.send(AppEvent::UpdateReasoningEffort(effort_clone));
+                app_tx.send(AppEvent::PersistModelSelection {
+                    model: model_clone.clone(),
+                    effort: effort_clone,
+                });
+            })],
+            dismiss_on_select: true,
+            is_current: true,
+            ..Default::default()
+        });
     }
 
-    // "Enter new API Key" — Phase 2 placeholder.
+    // "Enter new API Key" — inline API key entry.
+    // dismiss_on_select: false — the AppEvent handler calls
+    // replace_all_views() for ModelSwitch context.
     {
-        let cmd = login_command_for_provider(target_provider);
+        let ctx = AuthLaunchContext::ModelSwitch {
+            provider: target_provider,
+            model: selected_model.clone(),
+            effort: selected_effort,
+        };
         let app_tx = widget.app_event_tx.clone();
         items.push(SelectionItem {
             name: "Enter new API Key".to_string(),
-            description: Some(format!("Run: {cmd}")),
+            description: Some("Paste or type a new API key".to_string()),
             actions: vec![Box::new(move |_tx| {
-                app_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    crate::history_cell::new_info_event(
-                        format!("To add a new API key, run:\n  {cmd}"),
-                        None,
-                    ),
-                )));
+                app_tx.send(AppEvent::LaunchApiKeyEntry {
+                    context: ctx.clone(),
+                });
             })],
-            dismiss_on_select: true,
+            dismiss_on_select: false,
             ..Default::default()
         });
     }
 
-    // "OAuth Login" — Phase 2 placeholder.
-    {
-        let app_tx = widget.app_event_tx.clone();
-        items.push(SelectionItem {
-            name: "OAuth Login".to_string(),
-            description: Some(format!("Sign in with your {name} account")),
-            actions: vec![Box::new(move |_tx| {
-                app_tx.send(AppEvent::InsertHistoryCell(Box::new(
-                    crate::history_cell::new_info_event(
-                        "Mid-session OAuth switching is not yet available. \
-                         Use /logout to clear current credentials, then restart \
-                         Orbit Code to reach the onboarding OAuth flow."
-                            .to_string(),
-                        None,
+    // Provider-specific OAuth options (no "Remove" in model-switch context).
+    match target_provider {
+        ProviderName::OpenAI => {
+            {
+                let ctx = AuthLaunchContext::ModelSwitch {
+                    provider: target_provider,
+                    model: selected_model.clone(),
+                    effort: selected_effort,
+                };
+                let app_tx = widget.app_event_tx.clone();
+                items.push(SelectionItem {
+                    name: "Sign in with ChatGPT".to_string(),
+                    description: Some("Opens your browser for ChatGPT sign-in".to_string()),
+                    actions: vec![Box::new(move |_tx| {
+                        app_tx.send(AppEvent::LaunchOpenAiBrowserLogin {
+                            context: ctx.clone(),
+                        });
+                    })],
+                    dismiss_on_select: false,
+                    ..Default::default()
+                });
+            }
+            {
+                let ctx = AuthLaunchContext::ModelSwitch {
+                    provider: target_provider,
+                    model: selected_model,
+                    effort: selected_effort,
+                };
+                let app_tx = widget.app_event_tx.clone();
+                items.push(SelectionItem {
+                    name: "Sign in with Device Code".to_string(),
+                    description: Some(
+                        "Sign in from another device with a one-time code".to_string(),
                     ),
-                )));
-            })],
-            dismiss_on_select: true,
-            ..Default::default()
-        });
+                    actions: vec![Box::new(move |_tx| {
+                        app_tx.send(AppEvent::LaunchOpenAiDeviceCodeLogin {
+                            context: ctx.clone(),
+                        });
+                    })],
+                    dismiss_on_select: false,
+                    ..Default::default()
+                });
+            }
+        }
+        ProviderName::Anthropic => {
+            let ctx = AuthLaunchContext::ModelSwitch {
+                provider: target_provider,
+                model: selected_model,
+                effort: selected_effort,
+            };
+            let app_tx = widget.app_event_tx.clone();
+            items.push(SelectionItem {
+                name: "Sign in with Claude (OAuth)".to_string(),
+                description: Some("Opens your browser for code-paste sign-in".to_string()),
+                actions: vec![Box::new(move |_tx| {
+                    app_tx.send(AppEvent::LaunchAnthropicOAuth {
+                        context: ctx.clone(),
+                    });
+                })],
+                dismiss_on_select: false,
+                ..Default::default()
+            });
+        }
     }
 
     widget.bottom_pane.show_selection_view(SelectionViewParams {

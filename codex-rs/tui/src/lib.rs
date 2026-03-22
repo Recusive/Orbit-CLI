@@ -66,6 +66,7 @@ mod app_server_tui_dispatch;
 mod ascii_animation;
 #[cfg(all(not(target_os = "linux"), feature = "voice-input"))]
 mod audio_device;
+mod auth_flow;
 #[cfg(all(not(target_os = "linux"), not(feature = "voice-input")))]
 mod audio_device {
     use crate::app_event::RealtimeAudioDeviceKind;

@@ -65,6 +65,10 @@ Same as tui/: `ChatWidget` -> `StreamController` -> chunking -> commit_tick -> `
 
 This is the most important rule: the two crates share nearly identical UI code. When you change a widget, rendering function, or UI behavior in one crate, you must apply the same change to the other. Grep both `tui/src/` and `tui_app_server/src/` to verify.
 
+### Convention-54 exceptions
+
+- **`auth_flow.rs` / `auth_flow_view.rs` / inline auth popups (Phase 2):** The standalone `tui` inline auth flows (`auth_flow.rs`, `bottom_pane/auth_flow_view.rs`) are explicitly not mirrored here. The app-server auth path (`tui_app_server/src/onboarding/auth.rs`) is fundamentally RPC-driven and cannot share the standalone async login flows. A separate parity plan is tracked once the standalone TUI flow stabilizes. See `docs/tracked/audited/multi-provider-auth-switching-inline-auth-phase2.md`.
+
 ### Feature flags
 
 Same as tui/: `voice-input` (default), `vt100-tests`, `debug-logs`.
