@@ -1,10 +1,10 @@
-# Multi-Provider Auth Switching Implementation Plan (v2)
+# Multi-Provider Auth Switching Implementation Plan (v3 — Final)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let users switch between API key and OAuth authentication for both OpenAI and Anthropic providers mid-session, via a third step in the `/model` flow and a new `/auth` command.
 
-**Architecture:** Redesign auth storage from single-credential-per-provider (`ProviderAuth` enum) to multi-credential-per-provider (`ProviderCredentialSet` struct). Add auth popup as a new `chatwidget/auth_popup.rs` submodule. Phase 1 covers standalone `tui` only — `tui_app_server` deferred.
+**Architecture:** Extend the existing V2 auth storage with two optional backward-compatible fields (`alternate_credentials`, `preferred_auth_modes`). No format version change. All existing writers (onboarding, CLI, app-server, refresh) continue working unchanged because they go through `save_auth`/`save_auth_v2` which does load-merge-save. Auth popup lives in a new `chatwidget/auth_popup.rs` submodule. Phase 1 covers standalone `tui` only.
 
 **Tech Stack:** Rust, ratatui, orbit-code-core auth module, orbit-code-tui SelectionView popups.
 
@@ -16,11 +16,11 @@
 
 | File | Responsibility |
 |------|---------------|
-| `core/src/auth/storage.rs` | New `ProviderCredentialSet`, `OAuthCredential`, `ChatgptTokenData` types. V2->V3 migration. |
-| `core/src/auth/storage_tests.rs` | V3 round-trip, v2->v3 migration, credential set operations |
-| `core/src/auth/persistence.rs` | Field-level merge on save. Load with v3 support. |
-| `core/src/auth_tests.rs` | `preferred_mode` resolution in `auth_cached_for_provider` |
-| `core/src/auth/manager.rs` | `auth_cached_for_provider()` respects `preferred_mode` |
+| `core/src/auth/storage.rs` | Add `alternate_credentials`, `preferred_auth_modes` to `AuthDotJsonV2`. Swap helpers. Backup. |
+| `core/src/auth/storage_tests.rs` | Round-trip, backward compat, swap tests |
+| `core/src/auth/persistence.rs` | Merge logic for new fields. `swap_auth_method()` helper. |
+| `core/src/auth_tests.rs` | `preferred_mode` resolution tests |
+| `core/src/auth/manager.rs` | `auth_cached_for_provider()` respects `preferred_auth_modes` |
 | `tui/src/slash_command.rs` | Add `Auth` variant |
 | `tui/src/chatwidget/auth_popup.rs` | NEW: auth popup logic, API key input, provider detection |
 | `tui/src/chatwidget.rs` | Wire auth step into model-switch, wire `/auth` command |
@@ -28,397 +28,403 @@
 
 ---
 
-### Task 1: Define `ProviderCredentialSet` and V3 storage types
+### Task 1: Add `alternate_credentials` and `preferred_auth_modes` to `AuthDotJsonV2`
 
 **Files:**
-- Modify: `codex-rs/core/src/auth/storage.rs`
+- Modify: `codex-rs/core/src/auth/storage.rs:99-138`
 - Modify: `codex-rs/core/src/auth/storage_tests.rs`
 
-- [ ] **Step 1: Write failing test for `ProviderCredentialSet` round-trip**
+- [ ] **Step 1: Write failing test for new fields round-trip**
 
 In `storage_tests.rs`:
 
 ```rust
 #[test]
-fn v3_credential_set_round_trips() {
-    let mut v3 = AuthDotJsonV3::new();
-    let mut creds = ProviderCredentialSet::new();
-    creds.api_key = Some("sk-ant-test123".to_string());
-    creds.preferred_mode = Some(AuthMode::AnthropicApiKey);
-    v3.set_credentials(ProviderName::Anthropic, creds);
+fn alternate_credentials_and_preferred_modes_round_trip() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey { key: "sk-ant-active".to_string() },
+    );
+    v2.alternate_credentials.insert(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    v2.preferred_auth_modes.insert(ProviderName::Anthropic, AuthMode::AnthropicApiKey);
 
-    let json = serde_json::to_string_pretty(&v3).expect("serialize");
-    let loaded: AuthDotJsonV3 = serde_json::from_str(&json).expect("deserialize");
+    let json = serde_json::to_string_pretty(&v2).expect("serialize");
+    let loaded = deserialize_auth(&json).expect("deserialize");
 
-    let loaded_creds = loaded.credentials(ProviderName::Anthropic).expect("anthropic");
-    assert_eq!(loaded_creds.api_key.as_deref(), Some("sk-ant-test123"));
-    assert_eq!(loaded_creds.preferred_mode, Some(AuthMode::AnthropicApiKey));
-    assert!(loaded_creds.oauth.is_none());
+    assert_eq!(loaded.provider_auth(ProviderName::Anthropic), v2.provider_auth(ProviderName::Anthropic));
+    assert_eq!(loaded.alternate_credentials.get(&ProviderName::Anthropic), v2.alternate_credentials.get(&ProviderName::Anthropic));
+    assert_eq!(loaded.preferred_auth_modes.get(&ProviderName::Anthropic), Some(&AuthMode::AnthropicApiKey));
 }
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cargo test -p orbit-code-core -- storage_tests::v3_credential_set_round_trips`
-Expected: FAIL — types don't exist yet.
+Run: `cargo test -p orbit-code-core -- storage_tests::alternate_credentials_and_preferred_modes_round_trip`
+Expected: FAIL — fields don't exist yet.
 
-- [ ] **Step 3: Add new types to `storage.rs`**
-
-Add after existing `AuthDotJsonV2`:
+- [ ] **Step 3: Add new fields to `AuthDotJsonV2`**
 
 ```rust
-/// OAuth credential (provider-agnostic).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct OAuthCredential {
-    pub access_token: String,
-    pub refresh_token: String,
-    /// Unix timestamp in seconds when the access token expires.
-    pub expires_at: i64,
-}
-
-/// ChatGPT-specific token data (OpenAI OAuth and external tokens).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ChatgptTokenData {
-    pub tokens: TokenData,
-    pub last_refresh: Option<DateTime<Utc>>,
-}
-
-/// Per-provider credential set. Can hold both API key AND OAuth simultaneously.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct ProviderCredentialSet {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_mode: Option<AuthMode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub api_key: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub oauth: Option<OAuthCredential>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chatgpt_tokens: Option<ChatgptTokenData>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub external_tokens: Option<ChatgptTokenData>,
-}
-
-impl ProviderCredentialSet {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn has_any_auth(&self) -> bool {
-        self.api_key.is_some()
-            || self.oauth.is_some()
-            || self.chatgpt_tokens.is_some()
-            || self.external_tokens.is_some()
-    }
-}
-
-/// V3 auth storage — multi-credential per provider.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AuthDotJsonV3 {
+pub struct AuthDotJsonV2 {
     pub version: u32,
-    pub providers: HashMap<ProviderName, ProviderCredentialSet>,
+    pub providers: HashMap<ProviderName, ProviderAuth>,
+
+    /// Stored-but-inactive credential per provider. When user switches
+    /// auth method, the old credential moves here from `providers`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub alternate_credentials: HashMap<ProviderName, ProviderAuth>,
+
+    /// Last-used auth method per provider. Determines pre-highlight
+    /// in the auth popup and credential resolution order.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub preferred_auth_modes: HashMap<ProviderName, AuthMode>,
 }
+```
 
-impl AuthDotJsonV3 {
-    pub fn new() -> Self {
-        Self {
-            version: 3,
-            providers: HashMap::new(),
-        }
-    }
+Update `AuthDotJsonV2::new()`:
 
-    pub fn credentials(&self, provider: ProviderName) -> Option<&ProviderCredentialSet> {
-        self.providers.get(&provider)
-    }
-
-    pub fn credentials_mut(&mut self, provider: ProviderName) -> &mut ProviderCredentialSet {
-        self.providers.entry(provider).or_default()
-    }
-
-    pub fn set_credentials(&mut self, provider: ProviderName, creds: ProviderCredentialSet) {
-        self.providers.insert(provider, creds);
-    }
-
-    pub fn remove_credentials(&mut self, provider: ProviderName) -> Option<ProviderCredentialSet> {
-        self.providers.remove(&provider)
-    }
-
-    pub fn has_any_auth(&self) -> bool {
-        self.providers.values().any(ProviderCredentialSet::has_any_auth)
-    }
-}
-
-impl Default for AuthDotJsonV3 {
-    fn default() -> Self {
-        Self::new()
+```rust
+pub fn new() -> Self {
+    Self {
+        version: 2,
+        providers: HashMap::new(),
+        alternate_credentials: HashMap::new(),
+        preferred_auth_modes: HashMap::new(),
     }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cargo test -p orbit-code-core -- storage_tests::v3_credential_set_round_trips`
+Run: `cargo test -p orbit-code-core -- storage_tests::alternate_credentials_and_preferred_modes_round_trip`
 Expected: PASS
 
-- [ ] **Step 5: Run `just fmt` and commit**
+- [ ] **Step 5: Write backward-compat test (V2 without new fields)**
+
+```rust
+#[test]
+fn v2_without_new_fields_deserializes_with_empty_defaults() {
+    let json = r#"{"version":2,"providers":{}}"#;
+    let v2 = deserialize_auth(json).expect("deserialize");
+    assert!(v2.alternate_credentials.is_empty());
+    assert!(v2.preferred_auth_modes.is_empty());
+}
+```
+
+- [ ] **Step 6: Run test to verify it passes**
+
+Expected: PASS (due to `#[serde(default)]`).
+
+- [ ] **Step 7: Run `just fmt` and commit**
 
 ```bash
 just fmt
 git add codex-rs/core/src/auth/storage.rs codex-rs/core/src/auth/storage_tests.rs
-git commit -m "feat(auth): add ProviderCredentialSet and AuthDotJsonV3 types"
+git commit -m "feat(auth): add alternate_credentials and preferred_auth_modes to AuthDotJsonV2"
 ```
 
 ---
 
-### Task 2: V2 -> V3 migration
+### Task 2: Add swap helper and backup
 
 **Files:**
 - Modify: `codex-rs/core/src/auth/storage.rs`
 - Modify: `codex-rs/core/src/auth/storage_tests.rs`
 
-- [ ] **Step 1: Write failing test for v2->v3 migration**
+- [ ] **Step 1: Write failing test for swap operation**
 
 ```rust
 #[test]
-fn v2_migrates_to_v3() {
+fn swap_auth_method_moves_active_to_alternate() {
     let mut v2 = AuthDotJsonV2::new();
     v2.set_provider_auth(
         ProviderName::Anthropic,
         ProviderAuth::AnthropicApiKey { key: "sk-ant-key".to_string() },
     );
-    v2.set_provider_auth(
-        ProviderName::OpenAI,
-        ProviderAuth::OpenAiApiKey { key: "sk-openai".to_string() },
-    );
+    let new_oauth = ProviderAuth::AnthropicOAuth {
+        access_token: "at".to_string(),
+        refresh_token: "rt".to_string(),
+        expires_at: 999,
+    };
 
-    let v3 = AuthDotJsonV3::from(v2);
+    v2.swap_active_credential(ProviderName::Anthropic, new_oauth.clone());
 
-    let anthropic = v3.credentials(ProviderName::Anthropic).expect("anthropic");
-    assert_eq!(anthropic.api_key.as_deref(), Some("sk-ant-key"));
-    assert!(anthropic.oauth.is_none());
-
-    let openai = v3.credentials(ProviderName::OpenAI).expect("openai");
-    assert_eq!(openai.api_key.as_deref(), Some("sk-openai"));
+    // Active should be OAuth now
+    assert_eq!(v2.provider_auth(ProviderName::Anthropic), Some(&new_oauth));
+    // Old API key should be in alternate
+    assert!(matches!(
+        v2.alternate_credentials.get(&ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicApiKey { .. })
+    ));
 }
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Expected: FAIL — `From<AuthDotJsonV2> for AuthDotJsonV3` not implemented.
+Expected: FAIL — `swap_active_credential` doesn't exist.
 
-- [ ] **Step 3: Implement `From<AuthDotJsonV2> for AuthDotJsonV3`**
+- [ ] **Step 3: Implement `swap_active_credential()`**
+
+Add to `impl AuthDotJsonV2`:
 
 ```rust
-impl From<AuthDotJsonV2> for AuthDotJsonV3 {
-    fn from(v2: AuthDotJsonV2) -> Self {
-        let mut v3 = AuthDotJsonV3::new();
-        for (provider, auth) in v2.providers {
-            let creds = v3.credentials_mut(provider);
-            match auth {
-                ProviderAuth::OpenAiApiKey { key } => {
-                    creds.api_key = Some(key);
-                    creds.preferred_mode = Some(AuthMode::ApiKey);
-                }
-                ProviderAuth::Chatgpt { tokens, last_refresh } => {
-                    creds.chatgpt_tokens = Some(ChatgptTokenData { tokens, last_refresh });
-                    creds.preferred_mode = Some(AuthMode::Chatgpt);
-                }
-                ProviderAuth::ChatgptAuthTokens { tokens, last_refresh } => {
-                    creds.external_tokens = Some(ChatgptTokenData { tokens, last_refresh });
-                    creds.preferred_mode = Some(AuthMode::ChatgptAuthTokens);
-                }
-                ProviderAuth::AnthropicApiKey { key } => {
-                    creds.api_key = Some(key);
-                    creds.preferred_mode = Some(AuthMode::AnthropicApiKey);
-                }
-                ProviderAuth::AnthropicOAuth { access_token, refresh_token, expires_at } => {
-                    creds.oauth = Some(OAuthCredential { access_token, refresh_token, expires_at });
-                    creds.preferred_mode = Some(AuthMode::AnthropicOAuth);
-                }
-            }
+/// Swap the active credential for a provider. The old active credential
+/// moves to `alternate_credentials`, and `new_auth` becomes the active one.
+pub fn swap_active_credential(&mut self, provider: ProviderName, new_auth: ProviderAuth) {
+    if let Some(old_active) = self.providers.remove(&provider) {
+        self.alternate_credentials.insert(provider, old_active);
+    }
+    self.providers.insert(provider, new_auth);
+}
+
+/// Restore the alternate credential as active. Returns true if a swap occurred.
+pub fn restore_alternate_credential(&mut self, provider: ProviderName) -> bool {
+    if let Some(alternate) = self.alternate_credentials.remove(&provider) {
+        if let Some(current) = self.providers.remove(&provider) {
+            self.alternate_credentials.insert(provider, current);
         }
-        v3
+        self.providers.insert(provider, alternate);
+        true
+    } else {
+        false
     }
+}
+
+/// Remove all credentials for a provider (active + alternate + preference).
+pub fn remove_all_credentials(&mut self, provider: ProviderName) {
+    self.providers.remove(&provider);
+    self.alternate_credentials.remove(&provider);
+    self.preferred_auth_modes.remove(&provider);
 }
 ```
 
-- [ ] **Step 4: Update `deserialize_auth()` to try v3 first**
-
-```rust
-pub(super) fn deserialize_auth(json: &str) -> Result<AuthDotJsonV3, serde_json::Error> {
-    // Try v3 first
-    if let Ok(v3) = serde_json::from_str::<AuthDotJsonV3>(json)
-        && v3.version == 3
-    {
-        return Ok(v3);
-    }
-    // Try v2 and migrate
-    if let Ok(v2) = serde_json::from_str::<AuthDotJsonV2>(json)
-        && v2.version == 2
-    {
-        return Ok(AuthDotJsonV3::from(v2));
-    }
-    // Fall back to v1 -> v2 -> v3
-    let v1: AuthDotJson = serde_json::from_str(json)?;
-    Ok(AuthDotJsonV3::from(AuthDotJsonV2::from(v1)))
-}
-```
-
-- [ ] **Step 5: Write test for v1->v3 migration chain**
+- [ ] **Step 4: Write test for restore_alternate**
 
 ```rust
 #[test]
-fn v1_migrates_through_v2_to_v3() {
-    let json = r#"{"auth_mode":"apikey","openai_api_key":"sk-old"}"#;
-    let v3 = deserialize_auth(json).expect("deserialize");
-    let openai = v3.credentials(ProviderName::OpenAI).expect("openai");
-    assert_eq!(openai.api_key.as_deref(), Some("sk-old"));
+fn restore_alternate_swaps_back() {
+    let mut v2 = AuthDotJsonV2::new();
+    v2.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey { key: "sk-ant-key".to_string() },
+    );
+    let oauth = ProviderAuth::AnthropicOAuth {
+        access_token: "at".to_string(),
+        refresh_token: "rt".to_string(),
+        expires_at: 999,
+    };
+    v2.swap_active_credential(ProviderName::Anthropic, oauth);
+    v2.restore_alternate_credential(ProviderName::Anthropic);
+
+    // API key should be active again
+    assert!(matches!(
+        v2.provider_auth(ProviderName::Anthropic),
+        Some(ProviderAuth::AnthropicApiKey { .. })
+    ));
 }
 ```
 
-- [ ] **Step 6: Run all tests, `just fmt`, commit**
+- [ ] **Step 5: Run tests, `just fmt`, commit**
 
 ```bash
 just fmt
 cargo test -p orbit-code-core -- storage_tests
 git add codex-rs/core/src/auth/storage.rs codex-rs/core/src/auth/storage_tests.rs
-git commit -m "feat(auth): v2->v3 migration with multi-credential storage"
+git commit -m "feat(auth): add swap_active_credential and restore_alternate helpers"
 ```
 
 ---
 
-### Task 3: Update `AuthStorageBackend` and persistence to use V3
+### Task 3: Update persistence merge logic for new fields
 
 **Files:**
-- Modify: `codex-rs/core/src/auth/storage.rs` (backend trait + impls)
-- Modify: `codex-rs/core/src/auth/persistence.rs`
+- Modify: `codex-rs/core/src/auth/persistence.rs:89-128`
 - Modify: `codex-rs/core/src/auth_tests.rs`
 
-- [ ] **Step 1: Update `AuthStorageBackend` trait from V2 to V3**
+- [ ] **Step 1: Write failing test for merge preserving alternate_credentials**
 
-Change all `load() -> Option<AuthDotJsonV2>` to `load() -> Option<AuthDotJsonV3>` and all `save(&AuthDotJsonV2)` to `save(&AuthDotJsonV3)`. Update `FileAuthStorage`, `KeyringAuthStorage`, `AutoAuthStorage`, `EphemeralAuthStorage` implementations.
-
-- [ ] **Step 2: Update `save_auth_v2` to field-level merge on V3**
-
-Rename to `save_auth_v3` (keep `save_auth_v2` as thin wrapper for callers). The merge logic becomes field-level:
-
-```rust
-pub fn save_auth_v3(
-    orbit_code_home: &Path,
-    auth: &AuthDotJsonV3,
-    auth_credentials_store_mode: AuthCredentialsStoreMode,
-) -> std::io::Result<()> {
-    let storage = create_auth_storage(orbit_code_home.to_path_buf(), auth_credentials_store_mode);
-    let merged = match storage.load() {
-        Ok(Some(mut existing)) => {
-            for (provider, new_creds) in &auth.providers {
-                let target = existing.credentials_mut(*provider);
-                // Field-level merge: only overwrite fields that are Some in new_creds
-                if new_creds.api_key.is_some() {
-                    target.api_key = new_creds.api_key.clone();
-                }
-                if new_creds.oauth.is_some() {
-                    target.oauth = new_creds.oauth.clone();
-                }
-                if new_creds.chatgpt_tokens.is_some() {
-                    target.chatgpt_tokens = new_creds.chatgpt_tokens.clone();
-                }
-                if new_creds.external_tokens.is_some() {
-                    target.external_tokens = new_creds.external_tokens.clone();
-                }
-                if new_creds.preferred_mode.is_some() {
-                    target.preferred_mode = new_creds.preferred_mode;
-                }
-            }
-            existing
-        }
-        Ok(None) | Err(_) => auth.clone(),
-    };
-    storage.save(&merged)
-}
-```
-
-- [ ] **Step 3: Update `load_auth_dot_json_v2` -> `load_auth_dot_json_v3`**
-
-Keep backward-compat wrapper.
-
-- [ ] **Step 4: Update `to_v1_openai()` on V3 for backward compat**
-
-Implement `AuthDotJsonV3::to_v1_openai()` that maps credential set fields back to the v1 `AuthDotJson` struct.
-
-- [ ] **Step 5: Update `delete_provider` to clear entire credential set**
-
-- [ ] **Step 6: Write test for field-level merge**
+In `auth_tests.rs`:
 
 ```rust
 #[test]
-fn save_auth_v3_merges_credential_fields() {
+fn save_auth_v2_preserves_alternate_credentials() {
     let dir = tempfile::tempdir().expect("tempdir");
-    // Save API key for Anthropic
-    let mut initial = AuthDotJsonV3::new();
-    initial.credentials_mut(ProviderName::Anthropic).api_key = Some("sk-ant-key".to_string());
-    save_auth_v3(dir.path(), &initial, AuthCredentialsStoreMode::File).expect("save");
+    // Save initial: Anthropic API key active, OAuth as alternate
+    let mut initial = AuthDotJsonV2::new();
+    initial.set_provider_auth(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicApiKey { key: "sk-ant-key".to_string() },
+    );
+    initial.alternate_credentials.insert(
+        ProviderName::Anthropic,
+        ProviderAuth::AnthropicOAuth {
+            access_token: "at".to_string(),
+            refresh_token: "rt".to_string(),
+            expires_at: 999,
+        },
+    );
+    initial.preferred_auth_modes.insert(ProviderName::Anthropic, AuthMode::AnthropicApiKey);
+    save_auth_v2(dir.path(), &initial, AuthCredentialsStoreMode::File).expect("save");
 
-    // Save OAuth for Anthropic (should preserve API key)
-    let mut update = AuthDotJsonV3::new();
-    let creds = update.credentials_mut(ProviderName::Anthropic);
-    creds.oauth = Some(OAuthCredential {
-        access_token: "at".to_string(),
-        refresh_token: "rt".to_string(),
-        expires_at: 999,
-    });
-    save_auth_v3(dir.path(), &update, AuthCredentialsStoreMode::File).expect("save");
+    // Save update: only OpenAI key (should preserve Anthropic alternate + preference)
+    let mut update = AuthDotJsonV2::new();
+    update.set_provider_auth(
+        ProviderName::OpenAI,
+        ProviderAuth::OpenAiApiKey { key: "sk-openai".to_string() },
+    );
+    save_auth_v2(dir.path(), &update, AuthCredentialsStoreMode::File).expect("save");
 
-    // Both should exist
-    let loaded = load_auth_dot_json_v3(dir.path(), AuthCredentialsStoreMode::File)
+    // Load and verify everything preserved
+    let loaded = load_auth_dot_json_v2(dir.path(), AuthCredentialsStoreMode::File)
         .expect("load").expect("some");
-    let anthropic = loaded.credentials(ProviderName::Anthropic).expect("anthropic");
-    assert_eq!(anthropic.api_key.as_deref(), Some("sk-ant-key"));
-    assert!(anthropic.oauth.is_some());
+    assert!(loaded.alternate_credentials.contains_key(&ProviderName::Anthropic));
+    assert_eq!(loaded.preferred_auth_modes.get(&ProviderName::Anthropic), Some(&AuthMode::AnthropicApiKey));
 }
 ```
 
-- [ ] **Step 7: Run tests, `just fmt`, commit**
+- [ ] **Step 2: Run test to verify it fails**
+
+Expected: FAIL — `save_auth_v2` merge loop doesn't touch `alternate_credentials` or `preferred_auth_modes`.
+
+- [ ] **Step 3: Update merge logic in `save_auth_v2`**
+
+In `persistence.rs`, inside `save_auth_v2`, after the existing provider merge loop, add:
+
+```rust
+// Merge alternate_credentials
+for (provider, alt_auth) in &auth.alternate_credentials {
+    existing.alternate_credentials.insert(*provider, alt_auth.clone());
+}
+// Merge preferred_auth_modes
+for (provider, mode) in &auth.preferred_auth_modes {
+    existing.preferred_auth_modes.insert(*provider, *mode);
+}
+```
+
+Also update `save_auth` (the v1 compat path) — the v1->v2 conversion doesn't populate new fields, so existing merge-on-save naturally preserves them (the `existing` struct already has them from disk).
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Expected: PASS
+
+- [ ] **Step 5: Update `delete_provider` to clear alternate + preference**
+
+In `storage.rs`, update `AuthStorageBackend::delete_provider()` default impl:
+
+```rust
+fn delete_provider(&self, provider: ProviderName) -> std::io::Result<bool> {
+    if let Some(mut v2) = self.load()? {
+        let removed_active = v2.remove_provider_auth(provider).is_some();
+        let removed_alt = v2.alternate_credentials.remove(&provider).is_some();
+        v2.preferred_auth_modes.remove(&provider);
+        let removed = removed_active || removed_alt;
+        if removed {
+            if v2.has_any_auth() {
+                self.save(&v2)?;
+            } else {
+                self.delete()?;
+            }
+        }
+        Ok(removed)
+    } else {
+        Ok(false)
+    }
+}
+```
+
+- [ ] **Step 6: Run tests, `just fmt`, commit**
 
 ```bash
 just fmt
 cargo test -p orbit-code-core
-git add codex-rs/core/src/auth/
-git commit -m "feat(auth): update storage backend and persistence to V3 format"
+git add codex-rs/core/src/auth/persistence.rs codex-rs/core/src/auth/storage.rs codex-rs/core/src/auth_tests.rs
+git commit -m "feat(auth): merge alternate_credentials and preferred_auth_modes on save"
 ```
 
 ---
 
-### Task 4: Update `AuthManager.auth_cached_for_provider()` for `preferred_mode`
+### Task 4: Update `auth_cached_for_provider()` for preferred_mode
 
 **Files:**
 - Modify: `codex-rs/core/src/auth/manager.rs:169-238`
 - Modify: `codex-rs/core/src/auth_tests.rs`
 
-- [ ] **Step 1: Write failing test for preferred_mode resolution**
+- [ ] **Step 1: Write failing test**
 
 ```rust
 #[test]
-fn auth_cached_for_provider_respects_preferred_mode() {
-    // Setup: Anthropic has both API key and OAuth, preferred_mode = ApiKey
-    // Assert: auth_cached_for_provider returns ApiKey auth, not OAuth
+fn auth_cached_for_provider_uses_alternate_when_preferred() {
+    // Setup: Anthropic has API key in providers, OAuth in alternate_credentials,
+    // preferred_auth_modes says AnthropicOAuth
+    // Assert: auth_cached_for_provider returns OAuth, not API key
 }
 ```
 
-- [ ] **Step 2: Update `auth_cached_for_provider` to load V3 and respect `preferred_mode`**
+- [ ] **Step 2: Update `auth_cached_for_provider` Anthropic branch**
 
-When loading from v3 storage, check `preferred_mode` to decide which credential to return. Fall back to existing precedence when `preferred_mode` is `None`.
+In the `ProviderName::Anthropic` match arm, after loading v2 from storage, check `preferred_auth_modes` and `alternate_credentials`:
 
-- [ ] **Step 3: Add helper `codex_auth_from_credential_set()`**
+```rust
+ProviderName::Anthropic => {
+    if let Ok(Some(v2)) =
+        load_auth_dot_json_v2(&self.orbit_code_home, self.auth_credentials_store_mode)
+    {
+        let preferred = v2.preferred_auth_modes.get(&ProviderName::Anthropic).copied();
 
-Maps a `ProviderCredentialSet` + `preferred_mode` to the appropriate `CodexAuth` variant.
+        // Check if preferred mode points to alternate credential
+        if let Some(alt) = v2.alternate_credentials.get(&ProviderName::Anthropic)
+            && preferred == Some(auth_mode_for_provider_auth(alt))
+        {
+            if let Some(auth) = codex_auth_from_provider_auth(alt) {
+                return Some(auth);
+            }
+        }
 
-- [ ] **Step 4: Run tests, `just fmt`, commit**
+        // Default: use active credential from providers
+        if let Some(provider_auth) = v2.provider_auth(ProviderName::Anthropic) {
+            return codex_auth_from_provider_auth(provider_auth);
+        }
+    }
+    // Fall back to env var
+    if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")
+        && !key.is_empty()
+    {
+        return Some(CodexAuth::AnthropicApiKey(AnthropicApiKeyAuth::new(key)));
+    }
+    None
+}
+```
+
+Add helper:
+
+```rust
+fn auth_mode_for_provider_auth(auth: &ProviderAuth) -> AuthMode {
+    match auth {
+        ProviderAuth::OpenAiApiKey { .. } => AuthMode::ApiKey,
+        ProviderAuth::Chatgpt { .. } => AuthMode::Chatgpt,
+        ProviderAuth::ChatgptAuthTokens { .. } => AuthMode::ChatgptAuthTokens,
+        ProviderAuth::AnthropicApiKey { .. } => AuthMode::AnthropicApiKey,
+        ProviderAuth::AnthropicOAuth { .. } => AuthMode::AnthropicOAuth,
+    }
+}
+```
+
+- [ ] **Step 3: Run tests, `just fmt`, commit**
 
 ```bash
 just fmt
 cargo test -p orbit-code-core
 git add codex-rs/core/src/auth/manager.rs codex-rs/core/src/auth_tests.rs
-git commit -m "feat(auth): auth_cached_for_provider respects preferred_mode from V3"
+git commit -m "feat(auth): auth_cached_for_provider respects preferred_auth_modes"
 ```
 
 ---
@@ -428,9 +434,9 @@ git commit -m "feat(auth): auth_cached_for_provider respects preferred_mode from
 **Files:**
 - Modify: `codex-rs/tui/src/slash_command.rs`
 
-- [ ] **Step 1: Add `Auth` variant**
+- [ ] **Step 1: Add `Auth` variant after `Model`**
 
-Add `Auth` after `Model` in the enum. Description: `"manage authentication for model providers"`. `available_during_task`: false.
+Description: `"manage authentication for model providers"`. `available_during_task`: false.
 
 - [ ] **Step 2: Run `just fmt` and commit**
 
@@ -448,14 +454,13 @@ git commit -m "feat(tui): add /auth slash command variant"
 - Create: `codex-rs/tui/src/chatwidget/auth_popup.rs`
 - Modify: `codex-rs/tui/src/chatwidget.rs` (add `mod auth_popup;`)
 
-This is the core UI logic. Keeping it in a separate submodule per audit recommendation to avoid growing `chatwidget.rs` further.
-
-- [ ] **Step 1: Create `auth_popup.rs` with provider detection helper**
+- [ ] **Step 1: Create `auth_popup.rs` with helpers**
 
 ```rust
 //! Auth method selection popup for mid-session provider switching.
 
 use orbit_code_core::auth::storage::ProviderName;
+use orbit_code_core::auth::storage::ProviderAuth;
 
 pub(crate) fn provider_for_model(slug: &str) -> ProviderName {
     if slug.starts_with("claude-") {
@@ -480,21 +485,36 @@ pub(crate) fn provider_display_name(provider: ProviderName) -> &'static str {
         ProviderName::Anthropic => "Anthropic",
     }
 }
+
+pub(crate) fn credential_summary(auth: &ProviderAuth) -> String {
+    match auth {
+        ProviderAuth::OpenAiApiKey { key } => format!("API Key: {}", mask_credential(key)),
+        ProviderAuth::Chatgpt { .. } => "OAuth (ChatGPT)".to_string(),
+        ProviderAuth::ChatgptAuthTokens { .. } => "OAuth (external)".to_string(),
+        ProviderAuth::AnthropicApiKey { key } => format!("API Key: {}", mask_credential(key)),
+        ProviderAuth::AnthropicOAuth { .. } => "OAuth (Anthropic)".to_string(),
+    }
+}
 ```
 
-- [ ] **Step 2: Add `open_auth_popup()` function**
+- [ ] **Step 2: Add `open_auth_popup()` — builds context-aware selection items**
 
-Takes `ChatWidget` context (via `&mut self` on an impl block or as free function taking needed params), `target_provider`, `model`, `effort`, `is_standalone` flag.
+Takes `target_provider`, `model`, `effort`, `is_standalone`. Loads V2 storage. Checks `providers`, `alternate_credentials`, `preferred_auth_modes`. Builds `SelectionItem` list. Uses `SelectionViewParams` pattern.
 
-Builds `SelectionItem` list based on what credentials exist in `ProviderCredentialSet`. Pre-highlights item matching `preferred_mode`. Uses `SelectionViewParams` pattern from `open_reasoning_popup()`.
+On selection:
+- Existing active credential → no change needed, apply model switch
+- Existing alternate credential → call `restore_alternate_credential()`, save, apply
+- "Enter new API Key" → open masked input popup
+- "OAuth Login" → trigger browser OAuth flow
+- "Remove credentials" (standalone only) → confirm + call `remove_all_credentials()`
 
-- [ ] **Step 3: Add `open_api_key_input()` function**
+- [ ] **Step 3: Add `open_api_key_input()` — masked text input popup**
 
-Masked text input popup. On Enter: validates format, saves via `save_auth_v3()`, updates `preferred_mode`, applies model switch if not standalone.
+Masked input. On Enter: validate format, build `ProviderAuth`, call `swap_active_credential()`, save via `save_auth_v2()`, apply model switch.
 
 - [ ] **Step 4: Add `on_slash_auth()` — provider picker + status display**
 
-Shows provider list with credential status summary. On selection, opens `open_auth_popup()` with `is_standalone: true`.
+Shows both providers with credential summaries. On selection, opens `open_auth_popup()` with `is_standalone: true`.
 
 - [ ] **Step 5: Add `mod auth_popup;` to `chatwidget.rs`**
 
@@ -508,14 +528,14 @@ git commit -m "feat(tui): create auth_popup submodule with popup logic"
 
 ---
 
-### Task 7: Wire auth popup into model-switch flow
+### Task 7: Wire auth popup into model-switch flow and `/auth` command
 
 **Files:**
 - Modify: `codex-rs/tui/src/chatwidget.rs`
 
 - [ ] **Step 1: Modify effort popup selection handler**
 
-After effort is selected, before calling `apply_model_and_effort()`:
+After effort is selected, before `apply_model_and_effort()`:
 
 ```rust
 let target_provider = auth_popup::provider_for_model(&selected_model);
@@ -528,9 +548,8 @@ if target_provider != current_provider {
 }
 ```
 
-- [ ] **Step 2: Wire `/auth` command in slash command dispatch**
+- [ ] **Step 2: Wire `/auth` in slash command dispatch**
 
-In the match on `SlashCommand` variants, add:
 ```rust
 SlashCommand::Auth => self.on_slash_auth(),
 ```
@@ -545,19 +564,15 @@ git commit -m "feat(tui): wire auth popup into model-switch flow and /auth comma
 
 ---
 
-### Task 8: Snapshot tests for auth popups
+### Task 8: Snapshot tests
 
 **Files:**
 - Modify: `codex-rs/tui/src/chatwidget/tests.rs`
 
-- [ ] **Step 1: Write snapshot test — auth popup no credentials**
-
-- [ ] **Step 2: Write snapshot test — auth popup with existing API key**
-
-- [ ] **Step 3: Write snapshot test — auth popup with both API key and OAuth**
-
-- [ ] **Step 4: Write snapshot test — `/auth` status view**
-
+- [ ] **Step 1: Write snapshot — auth popup no credentials**
+- [ ] **Step 2: Write snapshot — auth popup with API key active**
+- [ ] **Step 3: Write snapshot — auth popup with API key active + OAuth alternate**
+- [ ] **Step 4: Write snapshot — /auth status view**
 - [ ] **Step 5: Run and accept snapshots**
 
 ```bash
@@ -576,7 +591,7 @@ git commit -m "test(tui): add snapshot tests for auth popups"
 
 ### Task 9: Final validation
 
-- [ ] **Step 1: Run clippy on changed crates**
+- [ ] **Step 1: Run clippy**
 
 ```bash
 just fix -p orbit-code-core
@@ -590,9 +605,11 @@ cargo test -p orbit-code-core
 cargo test -p orbit-code-tui
 ```
 
-- [ ] **Step 3: Run `just fmt`**
+- [ ] **Step 3: Verify no existing tests broke**
 
-- [ ] **Step 4: Final commit if any lint/format changes**
+Especially: `auth_tests::save_auth_v2_preserves_existing_providers`, `storage_tests::v2_roundtrip`, and all onboarding/CLI tests that touch auth persistence.
+
+- [ ] **Step 4: Run `just fmt`, final commit**
 
 ```bash
 just fmt
