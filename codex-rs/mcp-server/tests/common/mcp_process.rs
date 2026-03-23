@@ -56,8 +56,8 @@ impl McpProcess {
         orbit_code_home: &Path,
         env_overrides: &[(&str, Option<&str>)],
     ) -> anyhow::Result<Self> {
-        let program = orbit_code_utils_cargo_bin::cargo_bin("codex-mcp-server")
-            .context("should find binary for codex-mcp-server")?;
+        let program = orbit_code_utils_cargo_bin::cargo_bin("orbit-code-mcp-server")
+            .context("should find binary for orbit-code-mcp-server")?;
         let mut cmd = Command::new(program);
 
         cmd.stdin(Stdio::piped());

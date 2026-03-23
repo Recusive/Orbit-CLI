@@ -496,7 +496,7 @@ async fn create_mcp_process(responses: Vec<String>) -> anyhow::Result<McpHandle>
 fn create_config_toml(orbit_code_home: &Path, server_uri: &str) -> std::io::Result<()> {
     let config_toml = orbit_code_home.join("config.toml");
     std::fs::write(
-        config_toml,
+        &config_toml,
         format!(
             r#"
 model = "mock-model"
@@ -504,6 +504,7 @@ approval_policy = "untrusted"
 sandbox_policy = "workspace-write"
 
 model_provider = "mock_provider"
+cli_auth_credentials_store = "file"
 
 [model_providers.mock_provider]
 name = "Mock provider for test"
@@ -515,5 +516,13 @@ stream_max_retries = 0
 [features]
 "#
         ),
+    )?;
+
+    // Write a dummy v2 auth.json so the MCP server can make API requests
+    // to the mock provider without requiring real credentials.
+    let auth_json = orbit_code_home.join("auth.json");
+    std::fs::write(
+        auth_json,
+        r#"{"version":2,"providers":{"openai":{"type":"openai_api_key","key":"test-key"}}}"#,
     )
 }

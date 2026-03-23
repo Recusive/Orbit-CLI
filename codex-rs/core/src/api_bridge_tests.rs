@@ -31,11 +31,11 @@ fn map_api_error_maps_usage_limit_limit_name_header() {
     let mut headers = HeaderMap::new();
     headers.insert(
         ACTIVE_LIMIT_HEADER,
-        http::HeaderValue::from_static("orbit_code_other"),
+        http::HeaderValue::from_static("codex_other"),
     );
     headers.insert(
         "x-codex-other-limit-name",
-        http::HeaderValue::from_static("orbit_code_other"),
+        http::HeaderValue::from_static("codex_other"),
     );
     let body = serde_json::json!({
         "error": {
@@ -59,7 +59,7 @@ fn map_api_error_maps_usage_limit_limit_name_header() {
             .rate_limits
             .as_ref()
             .and_then(|snapshot| snapshot.limit_name.as_deref()),
-        Some("orbit_code_other")
+        Some("codex_other")
     );
 }
 

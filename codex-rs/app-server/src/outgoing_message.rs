@@ -761,7 +761,8 @@ mod tests {
                 "method": "account/updated",
                 "params": {
                     "authMode": "apikey",
-                    "planType": null
+                    "planType": null,
+                    "provider": null
                 },
             }),
             serde_json::to_value(jsonrpc_notification)
