@@ -11,6 +11,8 @@ use orbit_code_app_server_protocol::AppInfo;
 use orbit_code_protocol::openai_models::InputModality;
 use orbit_code_protocol::openai_models::ModelInfo;
 use orbit_code_protocol::openai_models::ModelsResponse;
+use orbit_code_protocol::openai_models::ReasoningEffort;
+use orbit_code_protocol::openai_models::ReasoningEffortPreset;
 use orbit_code_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
@@ -2772,5 +2774,207 @@ fn chat_tools_include_top_level_name() {
                 },
             },
         })]
+    );
+}
+
+fn test_model_preset(
+    id: &str,
+    model: &str,
+    display_name: &str,
+    description: &str,
+    show_in_picker: bool,
+    default_effort: ReasoningEffort,
+    efforts: Vec<ReasoningEffortPreset>,
+) -> ModelPreset {
+    ModelPreset {
+        id: id.to_string(),
+        model: model.to_string(),
+        display_name: display_name.to_string(),
+        description: description.to_string(),
+        default_reasoning_effort: default_effort,
+        supported_reasoning_efforts: efforts,
+        supports_personality: false,
+        is_default: false,
+        upgrade: None,
+        show_in_picker,
+        availability_nux: None,
+        supported_in_api: true,
+        input_modalities: vec![InputModality::Text, InputModality::Image],
+    }
+}
+
+#[test]
+fn spawn_agent_description_contains_model_reasoning_selection_rules() {
+    let config = test_config();
+    let model_info = ModelsManager::construct_model_info_offline_for_tests("gpt-5-codex", &config);
+    let mut features = Features::with_defaults();
+    features.enable(Feature::Collab);
+    let available_models = vec![test_model_preset(
+        "test-gpt",
+        "gpt-5.4",
+        "GPT-5.4",
+        "Fast and capable",
+        true,
+        ReasoningEffort::Medium,
+        vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffort::Low,
+                description: "Quick scan".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffort::High,
+                description: "Deep dive".to_string(),
+            },
+        ],
+    )];
+    let tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &model_info,
+        available_models: &available_models,
+        features: &features,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        sandbox_policy: &SandboxPolicy::DangerFullAccess,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+
+    let tool = create_spawn_agent_tool(&tools_config);
+    let description = match &tool {
+        ToolSpec::Function(ResponsesApiTool { description, .. }) => description,
+        _ => panic!("spawn_agent should be a Function tool"),
+    };
+
+    // Section header
+    assert!(
+        description.contains("### Choosing the model and reasoning level"),
+        "expected model/reasoning selection section header: {description:?}"
+    );
+
+    // Sub-agent escape clause
+    assert!(
+        description.contains(
+            "If you do not have access to the `request_user_input` tool (i.e., you are a sub-agent), skip the asking steps"
+        ),
+        "expected sub-agent escape clause: {description:?}"
+    );
+
+    // Explicit-user-choice exception
+    assert!(
+        description.contains("**User fully specified:**"),
+        "expected explicit-user-choice exception: {description:?}"
+    );
+
+    // "Pick what's best" escape hatch
+    assert!(
+        description.contains("Pick what's best (Recommended)"),
+        "expected 'Pick what\\'s best' escape hatch: {description:?}"
+    );
+
+    // Batch spawn instruction
+    assert!(
+        description.contains("**Batch spawns:**"),
+        "expected batch spawn instruction: {description:?}"
+    );
+
+    // Slug mapping rule
+    assert!(
+        description.contains("**Slug mapping:**"),
+        "expected slug mapping instruction: {description:?}"
+    );
+}
+
+#[test]
+fn spawn_agent_models_description_formats_mixed_presets_with_visibility() {
+    let presets = vec![
+        test_model_preset(
+            "gpt-preset",
+            "gpt-5.4",
+            "GPT-5.4",
+            "Fast and capable",
+            true,
+            ReasoningEffort::Medium,
+            vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Low,
+                    description: "Quick".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::High,
+                    description: "Thorough".to_string(),
+                },
+            ],
+        ),
+        test_model_preset(
+            "claude-preset",
+            "claude-sonnet-4-20250514",
+            "Claude Sonnet 4",
+            "Balanced reasoning",
+            true,
+            ReasoningEffort::High,
+            vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Medium,
+                    description: "Standard".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::XHigh,
+                    description: "Maximum".to_string(),
+                },
+            ],
+        ),
+        test_model_preset(
+            "hidden-preset",
+            "hidden-model",
+            "Hidden Model",
+            "Should not appear",
+            false,
+            ReasoningEffort::Low,
+            vec![],
+        ),
+    ];
+
+    let result = spawn_agent_models_description(&presets);
+
+    // Visible models appear with display name and slug
+    assert!(
+        result.contains("GPT-5.4 (`gpt-5.4`)"),
+        "expected GPT model in description: {result:?}"
+    );
+    assert!(
+        result.contains("Claude Sonnet 4 (`claude-sonnet-4-20250514`)"),
+        "expected Claude model in description: {result:?}"
+    );
+
+    // Hidden model is excluded
+    assert!(
+        !result.contains("Hidden Model"),
+        "hidden model should be excluded: {result:?}"
+    );
+    assert!(
+        !result.contains("hidden-model"),
+        "hidden model slug should be excluded: {result:?}"
+    );
+
+    // Reasoning efforts are listed
+    assert!(
+        result.contains("low (Quick)"),
+        "expected low effort for GPT: {result:?}"
+    );
+    assert!(
+        result.contains("high (Thorough)"),
+        "expected high effort for GPT: {result:?}"
+    );
+    assert!(
+        result.contains("xhigh (Maximum)"),
+        "expected xhigh effort for Claude: {result:?}"
+    );
+
+    // Default reasoning efforts appear
+    assert!(
+        result.contains("Default reasoning effort: medium."),
+        "expected GPT default effort: {result:?}"
+    );
+    assert!(
+        result.contains("Default reasoning effort: high."),
+        "expected Claude default effort: {result:?}"
     );
 }

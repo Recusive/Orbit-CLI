@@ -670,6 +670,12 @@ async fn turn_start_uses_thread_feature_overrides_for_collaboration_mode_instruc
     let request = response_mock.single_request();
     let payload_text = request.body_json().to_string();
     assert!(payload_text.contains("prefer using the `request_user_input` tool"));
+    assert!(
+        payload_text.contains(
+            "use `request_user_input` to ask the user for model and reasoning level selection before calling `spawn_agent`"
+        ),
+        "expected spawn-agent model/reasoning reinforcement in Default mode collaboration instructions"
+    );
 
     Ok(())
 }

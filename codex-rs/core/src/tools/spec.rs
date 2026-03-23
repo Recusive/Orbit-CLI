@@ -1105,6 +1105,32 @@ fn create_spawn_agent_tool(config: &ToolsConfig) -> ToolSpec {
         Spawn a sub-agent for a well-scoped task. Returns the agent id (and user-facing nickname when available) to use to communicate with this agent. This spawn_agent tool provides you access to smaller but more efficient sub-agents. A mini model can solve many tasks faster than the main model. You should follow the rules and guidelines below to use this tool.
 
 {available_models_description}
+### Choosing the model and reasoning level
+Before calling `spawn_agent`, you must determine which model and reasoning effort to use. If you do not have access to the `request_user_input` tool (i.e., you are a sub-agent), skip the asking steps below and choose autonomously. Otherwise, follow these rules in order:
+
+1. **User fully specified:** If the user's message explicitly names both a model and reasoning level (e.g., "use gpt-5.4 with xhigh"), respect that directly. Do not ask.
+2. **User partially specified:** If the user named a model but not reasoning (or vice versa), ask only for the missing field. Use a single `request_user_input` call for the unresolved field:
+   - If model is known but reasoning is missing: pick the 2 most relevant reasoning efforts supported by that model as options, plus "Pick what's best (Recommended)."
+   - If reasoning is known but model is missing: pick the 2 most relevant models that support that reasoning level as options, plus "Pick what's best (Recommended)."
+3. **Only one viable option:** If there is exactly one available model and it supports only one reasoning effort, use it directly. Do not ask.
+4. **Otherwise, ask sequentially:** When both model and reasoning are unresolved, ask in two steps:
+   - **Step 1 — Model:** Call `request_user_input` with a single question:
+     - **id:** `sub_agent_model`
+     - **header:** `Agent model`
+     - **question:** "Which model should the sub-agent use for [brief task description]?"
+     - **options (2-3):** Pick the 2-3 most relevant models for the task from the available models list above. Use the exact model slug as the label (e.g., `gpt-5.4`, `claude-sonnet-4-20250514`) and describe its strengths in the description field. Put "Pick what's best (Recommended)" first with description "Let me choose the best model for this task." The client adds a freeform "Other" option automatically.
+   - **Step 2 — Reasoning:** If the user picked a specific model (not "Pick what's best"), call `request_user_input` again:
+     - **id:** `sub_agent_reasoning`
+     - **header:** `Reasoning`
+     - **question:** "Which reasoning level for [model name]?"
+     - **options (2-3):** Pick the 2 most relevant reasoning efforts supported by the chosen model, plus "Pick what's best (Recommended)" first. Models may support more than 3 efforts — curate the best fits for the task, do not list all.
+   - If the user picked "Pick what's best" for model, skip the reasoning question — use autonomous selection for both.
+5. **Batch spawns:** If you are about to spawn multiple sub-agents in one round, ask once before the first spawn. Apply the user's chosen model and reasoning level to all agents in that batch.
+6. **Compatibility:** If the user's explicit choice is invalid or incompatible with available presets (e.g., a reasoning level not supported by the chosen model), ask for clarification via `request_user_input` instead of guessing or passing invalid arguments.
+7. **Slug mapping:** When calling `spawn_agent`, always use the exact model slug (shown in backticks in the models list above, e.g., `gpt-5.4`) for the `model` parameter and the exact effort name (e.g., `high`, `xhigh`) for the `reasoning_effort` parameter. If the user's answer from `request_user_input` uses a display name or freeform text, map it back to the correct slug/effort value from the available models list.
+
+After receiving the user's answer, call `spawn_agent` with the chosen `model` and `reasoning_effort` parameters (or omit them if the user picked "Pick what's best").
+
 ### When to delegate vs. do the subtask yourself
 - First, quickly analyze the overall user task and form a succinct high-level plan. Identify which tasks are immediate blockers on the critical path, and which tasks are sidecar tasks that are needed but can run in parallel without blocking the next local step. As part of that plan, explicitly decide what immediate task you should do locally right now. Do this planning step before delegating to agents so you do not hand off the immediate blocking task to a submodel and then waste time waiting on it.
 - Use the smaller subagent when a subtask is easy enough for it to handle and can run in parallel with your local work. Prefer delegating concrete, bounded sidecar tasks that materially advance the main task without blocking your immediate next local step.

@@ -198,6 +198,16 @@ async fn spawn_agent_description_lists_visible_models_and_reasoning_efforts() ->
         ),
         "expected agent-role clarification in spawn_agent description: {description:?}"
     );
+    assert!(
+        description.contains("### Choosing the model and reasoning level"),
+        "expected model/reasoning selection section in spawn_agent description: {description:?}"
+    );
+    assert!(
+        description.contains(
+            "If you do not have access to the `request_user_input` tool (i.e., you are a sub-agent), skip the asking steps"
+        ),
+        "expected sub-agent escape clause in spawn_agent description: {description:?}"
+    );
 
     Ok(())
 }

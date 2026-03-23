@@ -161,7 +161,7 @@ async fn websocket_transport_rejects_requests_with_origin_header() -> Result<()>
 }
 
 pub(super) async fn spawn_websocket_server(orbit_code_home: &Path) -> Result<(Child, SocketAddr)> {
-    let program = orbit_code_utils_cargo_bin::cargo_bin("codex-app-server")
+    let program = orbit_code_utils_cargo_bin::cargo_bin("orbit-code-app-server")
         .context("should find app-server binary")?;
     let mut cmd = Command::new(program);
     cmd.arg("--listen")
