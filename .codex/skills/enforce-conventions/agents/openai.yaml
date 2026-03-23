@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enforce Conventions"
+  short_description: "Review Orbit diffs for convention compliance"
+  default_prompt: "Use $enforce-conventions to review this diff for Orbit Code convention violations."
