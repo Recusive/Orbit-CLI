@@ -897,6 +897,13 @@
     },
     "GetAccountParams": {
       "properties": {
+        "provider": {
+          "description": "Optional provider name to scope the account read to a specific provider.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "refreshToken": {
           "default": false,
           "description": "When `true`, requests a proactive token refresh before returning.\n\nIn managed auth mode this triggers the normal refresh-token flow. In external auth mode this flag is ignored. Clients should refresh tokens themselves and call `account/login/start` with `chatgptAuthTokens`.",
@@ -1144,8 +1151,55 @@
           ],
           "title": "ChatgptAuthTokensLoginAccountParams",
           "type": "object"
+        },
+        {
+          "properties": {
+            "apiKey": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "anthropicApiKey"
+              ],
+              "title": "AnthropicApiKeyLoginAccountParamsType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "apiKey",
+            "type"
+          ],
+          "title": "AnthropicApiKeyLoginAccountParams",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicOAuth"
+              ],
+              "title": "AnthropicOAuthLoginAccountParamsType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicOAuthLoginAccountParams",
+          "type": "object"
         }
       ]
+    },
+    "LogoutAccountParams": {
+      "properties": {
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "McpServerOauthLoginParams": {
       "properties": {
@@ -2396,6 +2450,21 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "SubmitOAuthCodeParams": {
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "loginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "loginId"
+      ],
       "type": "object"
     },
     "TextElement": {
@@ -4352,13 +4421,44 @@
         },
         "method": {
           "enum": [
+            "account/oauth/submitCode"
+          ],
+          "title": "Account/oauth/submitCodeRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/SubmitOAuthCodeParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Account/oauth/submitCodeRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
             "account/logout"
           ],
           "title": "Account/logoutRequestMethod",
           "type": "string"
         },
         "params": {
-          "type": "null"
+          "allOf": [
+            {
+              "$ref": "#/definitions/LogoutAccountParams"
+            }
+          ],
+          "default": {
+            "provider": null
+          }
         }
       },
       "required": [

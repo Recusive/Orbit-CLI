@@ -42,6 +42,38 @@
           ],
           "title": "ChatgptAccount",
           "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicApiKey"
+              ],
+              "title": "AnthropicApiKeyAccountType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicApiKeyAccount",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicOAuth"
+              ],
+              "title": "AnthropicOAuthAccountType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicOAuthAccount",
+          "type": "object"
         }
       ]
     },
@@ -71,12 +103,12 @@
         }
       ]
     },
-    "requiresOpenaiAuth": {
+    "requiresAuth": {
       "type": "boolean"
     }
   },
   "required": [
-    "requiresOpenaiAuth"
+    "requiresAuth"
   ],
   "title": "GetAccountResponse",
   "type": "object"

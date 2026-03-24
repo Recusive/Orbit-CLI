@@ -37,3 +37,5 @@ Key supporting crates handle config loading, secrets management, sandboxing (mac
 - **Mirror rule**: all `tui/` changes must be mirrored in `tui_app_server/` unless documented otherwise.
 - **Bazel**: secondary build system for CI/release. If you add `include_str!`, `include_bytes!`, or `sqlx::migrate!`, update the crate's `BUILD.bazel`.
 - **Test structure**: integration tests go in `tests/all.rs` -> `tests/suite/mod.rs` -> `tests/suite/*.rs`. Never create multiple top-level test binaries.
+- **Unit test convention**: This repo does **NOT** use inline `#[cfg(test)] mod tests {}` blocks. Unit tests live in **sibling `*_tests.rs` files** (e.g., `auth.rs` → `auth_tests.rs`). Use `#[cfg(test)] #[path = "foo_tests.rs"] mod tests;` at the bottom of the implementation file to link them. See `docs/architects/orbit-code-testing-guide.md` for the full testing reference.
+- **Debugging logs**: TUI logs to `~/.orbit/log/codex-tui.log` (truncated each launch). Use `RUST_LOG=debug cargo run --bin orbit-code` and `tail -f ~/.orbit/log/codex-tui.log` in a second terminal. See `docs/logs/debugging-logs.md` for the full reference.

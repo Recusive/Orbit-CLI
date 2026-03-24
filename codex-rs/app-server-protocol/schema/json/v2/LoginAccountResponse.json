@@ -57,6 +57,50 @@
       ],
       "title": "ChatgptAuthTokensv2::LoginAccountResponse",
       "type": "object"
+    },
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "anthropicApiKey"
+          ],
+          "title": "AnthropicApiKeyv2::LoginAccountResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "AnthropicApiKeyv2::LoginAccountResponse",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "authUrl": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "loginId": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "anthropicOAuth"
+          ],
+          "title": "AnthropicOAuthv2::LoginAccountResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "authUrl",
+        "instructions",
+        "loginId",
+        "type"
+      ],
+      "title": "AnthropicOAuthv2::LoginAccountResponse",
+      "type": "object"
     }
   ],
   "title": "LoginAccountResponse"

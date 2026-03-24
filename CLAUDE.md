@@ -9,6 +9,10 @@ Orbit Code is the terminal-based coding agent for the Orbit ecosystem. A fork of
 **Parent project:** [Orbit](https://github.com/Recusive/Orbit) — AI-native desktop IDE
 **This repo:** [Orbit Code](https://github.com/Recusive/Orbit-Code) — Terminal agent
 
+## Roadmap Tracking
+
+**Keep `docs/tracked/orbit-code-roadmap.md` up to date.** Whenever a new feature is added, a bug is fixed, or work moves between stages, update the kanban table in that file. Move items from Todo → Done or add new items to the appropriate column. This is the single source of truth for what's shipped, in progress, and planned.
+
 ## Repository Structure
 
 | Directory | Purpose |

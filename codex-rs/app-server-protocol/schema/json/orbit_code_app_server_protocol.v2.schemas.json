@@ -46,6 +46,38 @@
           ],
           "title": "ChatgptAccount",
           "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicApiKey"
+              ],
+              "title": "AnthropicApiKeyAccountType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicApiKeyAccount",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicOAuth"
+              ],
+              "title": "AnthropicOAuthAccountType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicOAuthAccount",
+          "type": "object"
         }
       ]
     },
@@ -108,6 +140,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -683,7 +721,7 @@
       ]
     },
     "AuthMode": {
-      "description": "Authentication mode for OpenAI-backed providers.",
+      "description": "Authentication mode for OpenAI-backed and Anthropic-backed providers.",
       "oneOf": [
         {
           "description": "OpenAI API key provided by the caller and stored by Codex.",
@@ -703,6 +741,20 @@
           "description": "[UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE.\n\nChatGPT auth tokens are supplied by an external host app and are only stored in memory. Token refresh must be handled by the external host app.",
           "enum": [
             "chatgptAuthTokens"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Anthropic API key provided by the caller and stored by Codex.",
+          "enum": [
+            "anthropicApiKey"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Anthropic OAuth managed by Codex (tokens persisted and refreshed by Codex).",
+          "enum": [
+            "anthropicOAuth"
           ],
           "type": "string"
         }
@@ -1776,13 +1828,44 @@
             },
             "method": {
               "enum": [
+                "account/oauth/submitCode"
+              ],
+              "title": "Account/oauth/submitCodeRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/SubmitOAuthCodeParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Account/oauth/submitCodeRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
                 "account/logout"
               ],
               "title": "Account/logoutRequestMethod",
               "type": "string"
             },
             "params": {
-              "type": "null"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/LogoutAccountParams"
+                }
+              ],
+              "default": {
+                "provider": null
+              }
             }
           },
           "required": [
@@ -3162,7 +3245,7 @@
         {
           "description": "Path to a .codex/ folder within a project. There could be multiple of these between `cwd` and the project/repo root.",
           "properties": {
-            "dotCodexFolder": {
+            "dotOrbitCodeFolder": {
               "$ref": "#/definitions/AbsolutePathBuf"
             },
             "type": {
@@ -3174,7 +3257,7 @@
             }
           },
           "required": [
-            "dotCodexFolder",
+            "dotOrbitCodeFolder",
             "type"
           ],
           "title": "ProjectConfigLayerSource",
@@ -4474,6 +4557,13 @@
     "GetAccountParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
+        "provider": {
+          "description": "Optional provider name to scope the account read to a specific provider.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "refreshToken": {
           "default": false,
           "description": "When `true`, requests a proactive token refresh before returning.\n\nIn managed auth mode this triggers the normal refresh-token flow. In external auth mode this flag is ignored. Clients should refresh tokens themselves and call `account/login/start` with `chatgptAuthTokens`.",
@@ -4524,12 +4614,12 @@
             }
           ]
         },
-        "requiresOpenaiAuth": {
+        "requiresAuth": {
           "type": "boolean"
         }
       },
       "required": [
-        "requiresOpenaiAuth"
+        "requiresAuth"
       ],
       "title": "GetAccountResponse",
       "type": "object"
@@ -5177,6 +5267,42 @@
           ],
           "title": "ChatgptAuthTokensv2::LoginAccountParams",
           "type": "object"
+        },
+        {
+          "properties": {
+            "apiKey": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "anthropicApiKey"
+              ],
+              "title": "AnthropicApiKeyv2::LoginAccountParamsType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "apiKey",
+            "type"
+          ],
+          "title": "AnthropicApiKeyv2::LoginAccountParams",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicOAuth"
+              ],
+              "title": "AnthropicOAuthv2::LoginAccountParamsType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicOAuthv2::LoginAccountParams",
+          "type": "object"
         }
       ],
       "title": "LoginAccountParams"
@@ -5240,9 +5366,66 @@
           ],
           "title": "ChatgptAuthTokensv2::LoginAccountResponse",
           "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "anthropicApiKey"
+              ],
+              "title": "AnthropicApiKeyv2::LoginAccountResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "AnthropicApiKeyv2::LoginAccountResponse",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "authUrl": {
+              "type": "string"
+            },
+            "instructions": {
+              "type": "string"
+            },
+            "loginId": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "anthropicOAuth"
+              ],
+              "title": "AnthropicOAuthv2::LoginAccountResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "authUrl",
+            "instructions",
+            "loginId",
+            "type"
+          ],
+          "title": "AnthropicOAuthv2::LoginAccountResponse",
+          "type": "object"
         }
       ],
       "title": "LoginAccountResponse"
+    },
+    "LogoutAccountParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "LogoutAccountParams",
+      "type": "object"
     },
     "LogoutAccountResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -9234,6 +9417,97 @@
         }
       ]
     },
+    "SubmitOAuthCodeParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "loginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "loginId"
+      ],
+      "title": "SubmitOAuthCodeParams",
+      "type": "object"
+    },
+    "SubmitOAuthCodeResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "success"
+              ],
+              "title": "Successv2::SubmitOAuthCodeResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "Successv2::SubmitOAuthCodeResponse",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "failed"
+              ],
+              "title": "Failedv2::SubmitOAuthCodeResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "message",
+            "type"
+          ],
+          "title": "Failedv2::SubmitOAuthCodeResponse",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "notFound"
+              ],
+              "title": "NotFoundv2::SubmitOAuthCodeResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "NotFoundv2::SubmitOAuthCodeResponse",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "expired"
+              ],
+              "title": "Expiredv2::SubmitOAuthCodeResponseType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "Expiredv2::SubmitOAuthCodeResponse",
+          "type": "object"
+        }
+      ],
+      "title": "SubmitOAuthCodeResponse"
+    },
     "TerminalInteractionNotification": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -11516,7 +11790,10 @@
             "null"
           ]
         },
-        "codexErrorInfo": {
+        "message": {
+          "type": "string"
+        },
+        "orbitCodeErrorInfo": {
           "anyOf": [
             {
               "$ref": "#/definitions/CodexErrorInfo"
@@ -11525,9 +11802,6 @@
               "type": "null"
             }
           ]
-        },
-        "message": {
-          "type": "string"
         }
       },
       "required": [
@@ -11747,6 +12021,14 @@
     "TurnStartedNotification": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
+        "modelContextWindow": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "threadId": {
           "type": "string"
         },

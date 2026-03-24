@@ -70,6 +70,42 @@
       ],
       "title": "ChatgptAuthTokensv2::LoginAccountParams",
       "type": "object"
+    },
+    {
+      "properties": {
+        "apiKey": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "anthropicApiKey"
+          ],
+          "title": "AnthropicApiKeyv2::LoginAccountParamsType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiKey",
+        "type"
+      ],
+      "title": "AnthropicApiKeyv2::LoginAccountParams",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "anthropicOAuth"
+          ],
+          "title": "AnthropicOAuthv2::LoginAccountParamsType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "AnthropicOAuthv2::LoginAccountParams",
+      "type": "object"
     }
   ],
   "title": "LoginAccountParams"

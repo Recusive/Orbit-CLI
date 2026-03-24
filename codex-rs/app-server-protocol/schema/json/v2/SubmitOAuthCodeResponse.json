@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "success"
+          ],
+          "title": "Successv2::SubmitOAuthCodeResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Successv2::SubmitOAuthCodeResponse",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "failed"
+          ],
+          "title": "Failedv2::SubmitOAuthCodeResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "type"
+      ],
+      "title": "Failedv2::SubmitOAuthCodeResponse",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "notFound"
+          ],
+          "title": "NotFoundv2::SubmitOAuthCodeResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "NotFoundv2::SubmitOAuthCodeResponse",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "expired"
+          ],
+          "title": "Expiredv2::SubmitOAuthCodeResponseType",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Expiredv2::SubmitOAuthCodeResponse",
+      "type": "object"
+    }
+  ],
+  "title": "SubmitOAuthCodeResponse"
+}

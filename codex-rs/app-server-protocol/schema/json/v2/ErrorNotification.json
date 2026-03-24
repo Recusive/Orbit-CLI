@@ -124,7 +124,10 @@
             "null"
           ]
         },
-        "codexErrorInfo": {
+        "message": {
+          "type": "string"
+        },
+        "orbitCodeErrorInfo": {
           "anyOf": [
             {
               "$ref": "#/definitions/CodexErrorInfo"
@@ -133,9 +136,6 @@
               "type": "null"
             }
           ]
-        },
-        "message": {
-          "type": "string"
         }
       },
       "required": [
