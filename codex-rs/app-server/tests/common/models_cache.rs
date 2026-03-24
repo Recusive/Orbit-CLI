@@ -6,6 +6,7 @@ use orbit_code_protocol::openai_models::ConfigShellToolType;
 use orbit_code_protocol::openai_models::ModelInfo;
 use orbit_code_protocol::openai_models::ModelPreset;
 use orbit_code_protocol::openai_models::ModelVisibility;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::openai_models::TruncationPolicyConfig;
 use orbit_code_protocol::openai_models::default_input_modalities;
 use serde_json::json;
@@ -47,6 +48,11 @@ fn preset_to_info(preset: &ModelPreset, priority: i32) -> ModelInfo {
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
     }
 }
 

@@ -2,6 +2,7 @@
 
 mod client;
 mod error;
+mod models;
 mod stream;
 mod token_refresh;
 mod types;
@@ -12,6 +13,11 @@ pub use client::AnthropicStream;
 pub use error::AnthropicApiError;
 pub use error::AnthropicError;
 pub use error::Result;
+pub use models::AnthropicCapabilities;
+pub use models::AnthropicModelInfo;
+pub use models::AnthropicModelsClient;
+pub use models::AnthropicModelsError;
+pub use models::AnthropicModelsResponse;
 pub use stream::AnthropicEvent;
 pub use stream::ContentBlockType;
 pub use stream::DeltaType;

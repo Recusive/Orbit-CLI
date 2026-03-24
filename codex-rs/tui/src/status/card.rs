@@ -238,17 +238,9 @@ impl StatusHistoryCell {
         let session_id = session_id.as_ref().map(std::string::ToString::to_string);
         let forked_from = forked_from.map(|id| id.to_string());
         let default_usage = TokenUsage::default();
-        let (context_usage, raw_context_window) = match token_info {
+        let (context_usage, context_window) = match token_info {
             Some(info) => (&info.last_token_usage, info.model_context_window),
             None => (&default_usage, config.model_context_window),
-        };
-        // Always resolve context window from the current model name so
-        // mid-session model switches show the correct value.
-        let model_max = anthropic_model_context_window(&model_name);
-        let context_window = match (raw_context_window, model_max) {
-            (Some(raw), Some(max_val)) => Some(raw.min(max_val)),
-            (None, Some(max_val)) => Some(max_val),
-            (val, None) => val,
         };
         let context_window = context_window.map(|window| StatusContextWindowData {
             percent_remaining: context_usage.percent_of_context_window_remaining(window),
@@ -591,21 +583,6 @@ fn format_model_provider(config: &Config) -> Option<String> {
         Some(base_url) => format!("{provider_name} - {base_url}"),
         None => provider_name.to_string(),
     })
-}
-
-/// Returns the actual context window for known Anthropic models so the status
-/// display doesn't inflate the value from a global config override.
-fn anthropic_model_context_window(slug: &str) -> Option<i64> {
-    if !slug.starts_with("claude-") {
-        return None;
-    }
-    // 1M models require the context-1m beta header.
-    if matches!(slug, "claude-opus-4-6") {
-        Some(1_000_000)
-    } else {
-        // All other Claude models default to 200K.
-        Some(200_000)
-    }
 }
 
 fn sanitize_base_url(raw: &str) -> Option<String> {

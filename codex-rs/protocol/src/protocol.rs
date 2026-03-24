@@ -3070,6 +3070,12 @@ pub struct SessionConfiguredEvent {
     /// Path in which the rollout is stored. Can be `None` for ephemeral threads
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rollout_path: Option<PathBuf>,
+
+    /// Resolved model context window (in tokens) after applying config overrides
+    /// and catalog capping. Available from session start so UIs can display the
+    /// correct value before the first turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_context_window: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -4298,6 +4304,7 @@ mod tests {
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(rollout_file.path().to_path_buf()),
+                model_context_window: Some(200_000),
             }),
         };
 

@@ -1,3 +1,4 @@
+use crate::ANTHROPIC_PROVIDER_ID;
 use crate::AuthManager;
 use crate::CodexAuth;
 use crate::ModelProviderInfo;
@@ -175,6 +176,11 @@ impl ThreadManager {
             .get(OPENAI_PROVIDER_ID)
             .cloned()
             .unwrap_or_else(|| ModelProviderInfo::create_openai_provider(/*base_url*/ None));
+        let anthropic_models_provider = config
+            .model_providers
+            .get(ANTHROPIC_PROVIDER_ID)
+            .cloned()
+            .unwrap_or_else(ModelProviderInfo::create_anthropic_provider);
         let (thread_created_tx, _) = broadcast::channel(THREAD_CREATED_CHANNEL_CAPACITY);
         let plugins_manager = Arc::new(PluginsManager::new(orbit_code_home.clone()));
         let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
@@ -188,11 +194,12 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: Arc::new(ModelsManager::new_with_provider(
+                models_manager: Arc::new(ModelsManager::new_with_providers(
                     orbit_code_home,
                     auth_manager.clone(),
                     config.model_catalog.clone(),
                     openai_models_provider,
+                    Some(anthropic_models_provider),
                 )),
                 skills_manager,
                 plugins_manager,

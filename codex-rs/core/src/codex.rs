@@ -1857,6 +1857,19 @@ impl Session {
             let mut guard = network_policy_decider_session.write().await;
             *guard = Arc::downgrade(&sess);
         }
+        // Resolve the display context window for the SessionConfiguredEvent.
+        // Claude models use their catalog context window (authoritative cap),
+        // while GPT models pass None so the TUI falls through to
+        // config.model_context_window (preserving original Codex behavior
+        // where config=1M overrides the catalog default).
+        let model_slug = session_configuration.collaboration_mode.model();
+        let session_model_context_window =
+            if crate::anthropic_bridge::is_known_anthropic_model(model_slug) {
+                models_manager.get_catalog_context_window(model_slug).await
+            } else {
+                None // fall through to config.model_context_window in TUI
+            };
+
         // Dispatch the SessionConfiguredEvent first and then report any errors.
         // If resuming, include converted initial messages in the payload so UIs can render them immediately.
         let initial_messages = initial_history.get_event_msgs();
@@ -1879,6 +1892,7 @@ impl Session {
                 initial_messages,
                 network_proxy: session_network_proxy,
                 rollout_path,
+                model_context_window: session_model_context_window,
             }),
         })
         .chain(post_session_configured_events.into_iter());

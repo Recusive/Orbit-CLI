@@ -1,3 +1,4 @@
+pub(crate) mod anthropic_mapping;
 pub mod cache;
 pub mod collaboration_mode_presets;
 pub mod manager;

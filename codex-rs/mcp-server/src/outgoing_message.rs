@@ -311,6 +311,7 @@ mod tests {
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(rollout_file.path().to_path_buf()),
+                model_context_window: None,
             }),
         };
 
@@ -355,6 +356,7 @@ mod tests {
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(rollout_file.path().to_path_buf()),
+            model_context_window: None,
         };
         let event = Event {
             id: "1".to_string(),
@@ -424,6 +426,7 @@ mod tests {
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(rollout_file.path().to_path_buf()),
+            model_context_window: None,
         };
         let event = Event {
             id: "1".to_string(),

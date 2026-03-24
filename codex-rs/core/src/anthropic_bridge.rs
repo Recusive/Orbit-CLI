@@ -31,7 +31,9 @@ use orbit_code_anthropic::Tool;
 use orbit_code_anthropic::ToolChoice;
 use orbit_code_protocol::models::ContentItem;
 use orbit_code_protocol::models::ResponseItem;
+use orbit_code_protocol::openai_models::ModelInfo;
 use orbit_code_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::protocol::TokenUsage;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -58,40 +60,56 @@ pub fn is_known_anthropic_model(model: &str) -> bool {
     model.starts_with("claude-")
 }
 
+/// Build Anthropic-specific request defaults from catalog-driven `ModelInfo`.
+///
+/// All capability decisions (thinking style, effort support, beta headers,
+/// max output tokens) are read from `model_info` — no hardcoded slug matching.
 pub(crate) fn anthropic_model_defaults(
-    slug: &str,
+    model_info: &ModelInfo,
     effort: Option<ReasoningEffortConfig>,
 ) -> Result<AnthropicModelDefaults> {
-    if !is_known_anthropic_model(slug) {
+    if !is_known_anthropic_model(&model_info.slug) {
         return Err(CodexErr::InvalidRequest(format!(
-            "{ANTHROPIC_UNSUPPORTED_MODEL_ERROR_PREFIX} `{slug}`."
+            "{ANTHROPIC_UNSUPPORTED_MODEL_ERROR_PREFIX} `{}`.",
+            model_info.slug
         )));
     }
 
+    let max_tokens = model_info
+        .max_output_tokens
+        .and_then(|v| u64::try_from(v).ok())
+        .unwrap_or(DEFAULT_ANTHROPIC_MAX_TOKENS);
+
     let normalized_effort = effort.unwrap_or(ReasoningEffortConfig::Medium);
-    // Opus 4.6 and Sonnet 4.6 use adaptive thinking.
-    // Other models use budgeted thinking.
-    let thinking = if uses_adaptive_thinking(slug) {
+
+    let thinking = if model_info.thinking_style == ThinkingStyle::Adaptive {
         Some(ThinkingConfig::Adaptive {})
     } else {
-        budgeted_thinking_config(DEFAULT_ANTHROPIC_MAX_TOKENS, normalized_effort)
+        budgeted_thinking_config(max_tokens, normalized_effort)
     };
 
-    let additional_beta_headers = if requires_1m_context(slug) {
+    let additional_beta_headers = if model_info.requires_extended_context_beta {
         vec![CONTEXT_1M_BETA_HEADER_VALUE]
     } else {
         Vec::new()
     };
 
-    // effort parameter is only supported on Opus 4.6, Sonnet 4.6, and Opus 4.5.
-    let effort = if supports_effort_parameter(slug) {
-        Some(map_reasoning_effort_to_anthropic(normalized_effort))
+    let effort = if model_info.supports_effort {
+        // Clamp XHigh to High when the model doesn't support max effort.
+        let clamped = if !model_info.supports_effort_max
+            && normalized_effort == ReasoningEffortConfig::XHigh
+        {
+            ReasoningEffortConfig::High
+        } else {
+            normalized_effort
+        };
+        Some(map_reasoning_effort_to_anthropic(clamped))
     } else {
         None
     };
 
     Ok(AnthropicModelDefaults {
-        max_tokens: DEFAULT_ANTHROPIC_MAX_TOKENS,
+        max_tokens,
         thinking,
         additional_beta_headers,
         effort,
@@ -587,26 +605,6 @@ where
     });
 
     ResponseStream { rx_event }
-}
-
-/// Models that use adaptive thinking (type: "adaptive") instead of budgeted thinking.
-fn uses_adaptive_thinking(slug: &str) -> bool {
-    matches!(slug, "claude-opus-4-6" | "claude-sonnet-4-6")
-}
-
-fn requires_1m_context(slug: &str) -> bool {
-    // Only opus-4-6 gets the 1M context beta via OAuth.
-    // Sonnet-4-6 is rate-limited on long context for Pro/Max subscriptions.
-    matches!(slug, "claude-opus-4-6")
-}
-
-/// Models that support the `output_config.effort` parameter.
-/// Per Anthropic docs: Opus 4.6, Sonnet 4.6, and Opus 4.5 only.
-fn supports_effort_parameter(slug: &str) -> bool {
-    matches!(
-        slug,
-        "claude-opus-4-6" | "claude-sonnet-4-6" | "claude-opus-4-5-20251101"
-    )
 }
 
 fn budgeted_thinking_config(

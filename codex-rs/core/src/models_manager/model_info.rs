@@ -4,6 +4,7 @@ use orbit_code_protocol::openai_models::ModelInfo;
 use orbit_code_protocol::openai_models::ModelInstructionsVariables;
 use orbit_code_protocol::openai_models::ModelMessages;
 use orbit_code_protocol::openai_models::ModelVisibility;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::openai_models::TruncationMode;
 use orbit_code_protocol::openai_models::TruncationPolicyConfig;
 use orbit_code_protocol::openai_models::WebSearchToolType;
@@ -28,15 +29,8 @@ pub(crate) fn with_config_overrides(mut model: ModelInfo, config: &Config) -> Mo
         model.supports_reasoning_summaries = true;
     }
     if let Some(context_window) = config.model_context_window {
-        // Cap the config override to the model's actual context window.
-        // This prevents a global override (e.g. 1M for GPT-5.4) from
-        // inflating the context window of models with smaller limits
-        // (e.g. 200K for Haiku).
-        let capped = match model.context_window {
-            Some(model_max) => context_window.min(model_max),
-            None => context_window,
-        };
-        model.context_window = Some(capped);
+        // Original Codex behavior: direct assign from config.
+        model.context_window = Some(context_window);
     }
     if let Some(auto_compact_token_limit) = config.model_auto_compact_token_limit {
         model.auto_compact_token_limit = Some(auto_compact_token_limit);
@@ -98,6 +92,11 @@ pub(crate) fn model_info_from_slug(slug: &str) -> ModelInfo {
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: true, // this is the fallback model metadata
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
     }
 }
 

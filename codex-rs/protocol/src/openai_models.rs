@@ -58,6 +58,33 @@ impl FromStr for ReasoningEffort {
     }
 }
 
+/// Thinking behavior style for Claude models.
+///
+/// Controls whether the model uses adaptive (always-on, self-managed) or budgeted
+/// (caller-controlled budget) thinking.
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Display,
+    JsonSchema,
+    TS,
+    EnumIter,
+    Hash,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum ThinkingStyle {
+    #[default]
+    Budgeted,
+    Adaptive,
+}
+
 /// Canonical user-input modality tags advertised by a model.
 #[derive(
     Debug,
@@ -291,6 +318,24 @@ pub struct ModelInfo {
     pub used_fallback_model_metadata: bool,
     #[serde(default)]
     pub supports_search_tool: bool,
+
+    // -- Anthropic capability fields (populated from bundled catalog and/or remote API) --
+    /// Thinking behavior: `Adaptive` (always-on) or `Budgeted` (caller-controlled).
+    #[serde(default)]
+    pub thinking_style: ThinkingStyle,
+    /// Whether the model supports the `effort` parameter on the Anthropic Messages API.
+    #[serde(default)]
+    pub supports_effort: bool,
+    /// Whether the model supports `max` effort level (only Opus-class models).
+    #[serde(default)]
+    pub supports_effort_max: bool,
+    /// Whether the model requires the `context-1m` beta header for extended context.
+    #[serde(default)]
+    pub requires_extended_context_beta: bool,
+    /// Maximum output tokens the model supports. When `None`, callers should fall back
+    /// to a conservative default (e.g. 32 000).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<i64>,
 }
 
 impl ModelInfo {
@@ -547,6 +592,11 @@ mod tests {
             input_modalities: default_input_modalities(),
             used_fallback_model_metadata: false,
             supports_search_tool: false,
+            thinking_style: ThinkingStyle::Budgeted,
+            supports_effort: false,
+            supports_effort_max: false,
+            requires_extended_context_beta: false,
+            max_output_tokens: None,
         }
     }
 

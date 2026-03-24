@@ -7676,6 +7676,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             };
             Arc::new(new_session_info(
                 app.chat_widget.config_ref(),
@@ -7897,6 +7898,7 @@ guardian_approval = true
         ServerNotification::TurnStarted(TurnStartedNotification {
             thread_id: thread_id.to_string(),
             turn: test_turn(turn_id, TurnStatus::InProgress, Vec::new()),
+            model_context_window: None,
         })
     }
 
@@ -8519,6 +8521,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             }),
         });
 
@@ -8635,6 +8638,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             };
             Arc::new(new_session_info(
                 app.chat_widget.config_ref(),
@@ -8695,6 +8699,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             }),
         });
 
@@ -8788,6 +8793,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             }),
         });
 
@@ -9136,6 +9142,7 @@ guardian_approval = true
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(PathBuf::new()),
+            model_context_window: None,
         };
 
         app.chat_widget.handle_orbit_code_event(Event {
@@ -9227,6 +9234,7 @@ guardian_approval = true
                 initial_messages: None,
                 network_proxy: None,
                 rollout_path: Some(PathBuf::new()),
+                model_context_window: None,
             }),
         });
         app.chat_widget

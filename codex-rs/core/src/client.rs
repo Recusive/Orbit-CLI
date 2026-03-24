@@ -1452,7 +1452,7 @@ impl ModelClientSession {
             )));
         }
 
-        let defaults = anthropic_model_defaults(&model_info.slug, effort)?;
+        let defaults = anthropic_model_defaults(model_info, effort)?;
         let request = build_messages_request(prompt, &model_info.slug, &defaults)?;
         // Use the Anthropic provider directly rather than the session's stored
         // provider, which may be OpenAI if the user switched models mid-session.

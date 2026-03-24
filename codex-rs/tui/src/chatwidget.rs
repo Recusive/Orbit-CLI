@@ -1389,6 +1389,9 @@ impl ChatWidget {
                 Constrained::allow_only(event.sandbox_policy.clone());
         }
         self.config.approvals_reviewer = event.approvals_reviewer;
+        // Initialize the context window from the resolved model info so the
+        // status display shows the correct value before the first turn.
+        self.apply_turn_started_context_window(event.model_context_window);
         let initial_messages = event.initial_messages.clone();
         self.last_copyable_output = None;
         let forked_from_id = event.forked_from_id;
@@ -8288,6 +8291,25 @@ impl ChatWidget {
             mask.model = Some(model.to_string());
         }
         self.refresh_model_display();
+    }
+
+    /// Re-resolve the context window for the given model and update the
+    /// status display. Called on model switch so the status card shows the
+    /// correct context window immediately, not only after the first turn.
+    pub(crate) async fn update_model_context_window(
+        &mut self,
+        model: &str,
+        models_manager: &orbit_code_core::models_manager::manager::ModelsManager,
+    ) {
+        // Claude models: use catalog context window (authoritative cap).
+        // GPT models: pass None so the status card falls through to
+        // config.model_context_window (preserving original Codex behavior).
+        let display_ctx = if orbit_code_core::anthropic_bridge::is_known_anthropic_model(model) {
+            models_manager.get_catalog_context_window(model).await
+        } else {
+            None
+        };
+        self.apply_turn_started_context_window(display_ctx);
     }
 
     fn set_service_tier_selection(&mut self, service_tier: Option<ServiceTier>) {

@@ -885,7 +885,12 @@
       "supports_parallel_tool_calls": false,
       "supports_image_detail_original": false,
       "context_window": 200000,
-      "experimental_supported_tools": []
+      "experimental_supported_tools": [],
+      "thinking_style": "budgeted",
+      "supports_effort": true,
+      "supports_effort_max": false,
+      "requires_extended_context_beta": false,
+      "max_output_tokens": 64000
     },
     {
       "slug": "claude-sonnet-4-6",
@@ -925,7 +930,12 @@
       "supports_parallel_tool_calls": false,
       "supports_image_detail_original": false,
       "context_window": 200000,
-      "experimental_supported_tools": []
+      "experimental_supported_tools": [],
+      "thinking_style": "adaptive",
+      "supports_effort": true,
+      "supports_effort_max": false,
+      "requires_extended_context_beta": false,
+      "max_output_tokens": 64000
     },
     {
       "slug": "claude-opus-4-6",
@@ -969,7 +979,12 @@
       "supports_parallel_tool_calls": false,
       "supports_image_detail_original": false,
       "context_window": 1000000,
-      "experimental_supported_tools": []
+      "experimental_supported_tools": [],
+      "thinking_style": "adaptive",
+      "supports_effort": true,
+      "supports_effort_max": true,
+      "requires_extended_context_beta": true,
+      "max_output_tokens": 128000
     },
     {
       "slug": "claude-haiku-4-5-20251001",
@@ -1009,7 +1024,12 @@
       "supports_parallel_tool_calls": false,
       "supports_image_detail_original": false,
       "context_window": 200000,
-      "experimental_supported_tools": []
+      "experimental_supported_tools": [],
+      "thinking_style": "budgeted",
+      "supports_effort": false,
+      "supports_effort_max": false,
+      "requires_extended_context_beta": false,
+      "max_output_tokens": 64000
     }
   ]
 }

@@ -4739,6 +4739,9 @@ pub struct ThreadNameUpdatedNotification {
 pub struct TurnStartedNotification {
     pub thread_id: String,
     pub turn: Turn,
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub model_context_window: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]

@@ -30,6 +30,7 @@ use orbit_code_protocol::openai_models::ModelVisibility;
 use orbit_code_protocol::openai_models::ModelsResponse;
 use orbit_code_protocol::openai_models::ReasoningEffort;
 use orbit_code_protocol::openai_models::ReasoningEffortPreset;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::openai_models::TruncationPolicyConfig;
 use orbit_code_protocol::protocol::AskForApproval;
 use orbit_code_protocol::protocol::EventMsg;
@@ -1271,6 +1272,11 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
         input_modalities: vec![InputModality::Text],
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
         priority: 1,
         upgrade: None,
         base_instructions: "base instructions".to_string(),

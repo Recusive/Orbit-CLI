@@ -231,6 +231,7 @@ async fn resumed_initial_messages_render_history() {
         ]),
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -337,6 +338,7 @@ async fn replayed_user_message_preserves_text_elements_and_local_images() {
         })]),
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -398,6 +400,7 @@ async fn replayed_user_message_preserves_remote_image_urls() {
         })]),
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -461,6 +464,7 @@ async fn session_configured_syncs_widget_config_permissions_and_cwd() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: None,
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -509,6 +513,7 @@ async fn replayed_user_message_with_only_remote_images_renders_history_cell() {
         })]),
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -562,6 +567,7 @@ async fn replayed_user_message_with_only_local_images_does_not_render_history_ce
         })]),
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
 
     chat.handle_orbit_code_event(Event {
@@ -669,6 +675,7 @@ async fn submission_preserves_text_elements_and_local_images() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -753,6 +760,7 @@ async fn submission_with_remote_and_local_images_keeps_local_placeholder_numberi
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -848,6 +856,7 @@ async fn enter_with_only_remote_images_submits_user_turn() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -913,6 +922,7 @@ async fn shift_enter_with_only_remote_images_does_not_submit_user_turn() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -953,6 +963,7 @@ async fn enter_with_only_remote_images_does_not_submit_when_modal_is_active() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -993,6 +1004,7 @@ async fn enter_with_only_remote_images_does_not_submit_when_input_disabled() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -1034,6 +1046,7 @@ async fn submission_prefers_selected_duplicate_skill_path() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -4282,6 +4295,7 @@ async fn live_app_server_turn_completed_clears_working_status_after_answer_item(
                 status: AppServerTurnStatus::InProgress,
                 error: None,
             },
+            model_context_window: None,
         }),
         None,
     );
@@ -4531,6 +4545,7 @@ async fn live_app_server_failed_turn_does_not_duplicate_error_history() {
                 status: AppServerTurnStatus::InProgress,
                 error: None,
             },
+            model_context_window: None,
         }),
         None,
     );
@@ -4587,6 +4602,7 @@ async fn replayed_retryable_app_server_error_keeps_turn_running() {
                 status: AppServerTurnStatus::InProgress,
                 error: None,
             },
+            model_context_window: None,
         }),
         Some(ReplayKind::ThreadSnapshot),
     );
@@ -4629,6 +4645,7 @@ async fn live_app_server_stream_recovery_restores_previous_status_header() {
                 status: AppServerTurnStatus::InProgress,
                 error: None,
             },
+            model_context_window: None,
         }),
         None,
     );
@@ -4683,6 +4700,7 @@ async fn live_app_server_server_overloaded_error_renders_warning() {
                 status: AppServerTurnStatus::InProgress,
                 error: None,
             },
+            model_context_window: None,
         }),
         None,
     );
@@ -4780,6 +4798,7 @@ async fn replayed_reasoning_item_hides_raw_reasoning_when_disabled() {
             initial_messages: None,
             network_proxy: None,
             rollout_path: None,
+            model_context_window: None,
         }),
     });
     let _ = drain_insert_history(&mut rx);
@@ -4825,6 +4844,7 @@ async fn replayed_reasoning_item_shows_raw_reasoning_when_enabled() {
             initial_messages: None,
             network_proxy: None,
             rollout_path: None,
+            model_context_window: None,
         }),
     });
     let _ = drain_insert_history(&mut rx);
@@ -5023,6 +5043,7 @@ async fn submit_user_message_emits_structured_plugin_mentions_from_bindings() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -6341,6 +6362,7 @@ async fn plan_slash_command_with_args_submits_prompt_in_plan_mode() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: None,
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "configured".into(),
@@ -8941,6 +8963,7 @@ async fn bang_shell_command_submits_run_user_shell_command_in_app_server_tui() {
         initial_messages: None,
         network_proxy: None,
         rollout_path: Some(rollout_file.path().to_path_buf()),
+        model_context_window: None,
     };
     chat.handle_orbit_code_event(Event {
         id: "initial".into(),
@@ -9380,6 +9403,7 @@ async fn permissions_selection_marks_guardian_approvals_current_after_session_co
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(PathBuf::new()),
+            model_context_window: None,
         }),
     });
 
@@ -9435,6 +9459,7 @@ async fn permissions_selection_marks_guardian_approvals_current_with_custom_work
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(PathBuf::new()),
+            model_context_window: None,
         }),
     });
 

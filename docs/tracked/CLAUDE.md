@@ -12,6 +12,7 @@ Contains 3 subdirectories (audited, done, todo).
 - `provider-specific-reasoning-level-labels.md` — Provider-specific XHigh labels: "Max" for Claude, "Extra High" for OpenAI
 - `ungate-request-user-input.md` — Ungate request_user_input: available in all collaboration modes
 - `ask-user-sub-agent-model-selection.md` — Ask user for sub-agent model/reasoning selection before spawning
+- `anthropic-model-metadata-pipeline.md` — Proper Anthropic model metadata pipeline mirroring the GPT architecture
 
 ## Todo
 

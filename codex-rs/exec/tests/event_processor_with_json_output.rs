@@ -105,6 +105,7 @@ fn session_configured_produces_thread_started_event() {
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(rollout_path),
+            model_context_window: None,
         }),
     );
     let out = ep.collect_thread_events(&ev);

@@ -1178,6 +1178,7 @@ fn thread_session_state_to_legacy_event(
         initial_messages: None,
         network_proxy: session.network_proxy,
         rollout_path: session.rollout_path,
+        model_context_window: None,
     }
 }
 
@@ -1766,6 +1767,9 @@ impl ChatWidget {
                 Constrained::allow_only(event.sandbox_policy.clone());
         }
         self.config.approvals_reviewer = event.approvals_reviewer;
+        // Initialize the context window from the resolved model info so the
+        // status display shows the correct value before the first turn.
+        self.apply_turn_started_context_window(event.model_context_window);
         self.last_copyable_output = None;
         let forked_from_id = event.forked_from_id;
         let model_for_header = event.model.clone();
@@ -2296,7 +2300,6 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(test)]
     fn apply_turn_started_context_window(&mut self, model_context_window: Option<i64>) {
         let info = match self.token_info.take() {
             Some(mut info) => {

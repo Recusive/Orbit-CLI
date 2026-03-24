@@ -20,6 +20,7 @@ use orbit_code_protocol::openai_models::ModelVisibility;
 use orbit_code_protocol::openai_models::ModelsResponse;
 use orbit_code_protocol::openai_models::ReasoningEffort;
 use orbit_code_protocol::openai_models::ReasoningEffortPreset;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::openai_models::TruncationPolicyConfig;
 use orbit_code_protocol::openai_models::default_input_modalities;
 use orbit_code_protocol::protocol::AskForApproval;
@@ -662,6 +663,11 @@ async fn remote_model_friendly_personality_instructions_with_feature() -> anyhow
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
     };
 
     let _models_mock = mount_models_once(
@@ -777,6 +783,11 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
     };
 
     let _models_mock = mount_models_once(

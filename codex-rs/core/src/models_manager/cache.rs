@@ -18,6 +18,10 @@ pub(crate) struct ModelsCacheManager {
     cache_ttl: Duration,
 }
 
+const OPENAI_CACHE_FILE: &str = "models_cache_openai.json";
+const ANTHROPIC_CACHE_FILE: &str = "models_cache_anthropic.json";
+const LEGACY_CACHE_FILE: &str = "models_cache.json";
+
 impl ModelsCacheManager {
     /// Create a new cache manager with the given path and TTL.
     pub(crate) fn new(cache_path: PathBuf, cache_ttl: Duration) -> Self {
@@ -25,6 +29,30 @@ impl ModelsCacheManager {
             cache_path,
             cache_ttl,
         }
+    }
+
+    /// OpenAI model cache. Falls back to legacy `models_cache.json` if the
+    /// provider-specific file does not exist yet.
+    pub(crate) fn for_openai(orbit_code_home: &std::path::Path, ttl: Duration) -> Self {
+        Self::new(orbit_code_home.join(OPENAI_CACHE_FILE), ttl)
+    }
+
+    /// Anthropic model cache.
+    pub(crate) fn for_anthropic(orbit_code_home: &std::path::Path, ttl: Duration) -> Self {
+        Self::new(orbit_code_home.join(ANTHROPIC_CACHE_FILE), ttl)
+    }
+
+    /// Legacy cache path for migration fallback.
+    pub(crate) fn legacy_path(orbit_code_home: &std::path::Path) -> PathBuf {
+        orbit_code_home.join(LEGACY_CACHE_FILE)
+    }
+
+    /// Returns the parent directory of this cache file.
+    pub(crate) fn cache_path_parent(&self) -> PathBuf {
+        self.cache_path
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default()
     }
 
     /// Attempt to load a fresh cache entry. Returns `None` if the cache doesn't exist or is stale.
@@ -71,6 +99,22 @@ impl ModelsCacheManager {
             "models cache: cache hit"
         );
         Some(cache)
+    }
+
+    /// Load a fresh cache entry, falling back to a legacy path if the primary
+    /// file does not exist. Used by the OpenAI cache to migrate from the old
+    /// single `models_cache.json` to the per-provider file.
+    pub(crate) async fn load_fresh_with_legacy_fallback(
+        &self,
+        legacy_path: &std::path::Path,
+        expected_version: &str,
+    ) -> Option<ModelsCache> {
+        if let Some(cache) = self.load_fresh(expected_version).await {
+            return Some(cache);
+        }
+        // Try legacy path if the provider-specific file was empty/missing/stale.
+        let legacy = ModelsCacheManager::new(legacy_path.to_path_buf(), self.cache_ttl);
+        legacy.load_fresh(expected_version).await
     }
 
     /// Persist the cache to disk, creating parent directories as needed.

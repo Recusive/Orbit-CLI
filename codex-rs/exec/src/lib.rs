@@ -1048,6 +1048,7 @@ fn session_configured_from_thread_response(
         initial_messages: None,
         network_proxy: None,
         rollout_path,
+        model_context_window: None,
     })
 }
 

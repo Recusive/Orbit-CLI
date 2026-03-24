@@ -24,6 +24,7 @@ use orbit_code_protocol::openai_models::ModelVisibility;
 use orbit_code_protocol::openai_models::ModelsResponse;
 use orbit_code_protocol::openai_models::ReasoningEffort;
 use orbit_code_protocol::openai_models::ReasoningEffortPreset;
+use orbit_code_protocol::openai_models::ThinkingStyle;
 use orbit_code_protocol::openai_models::TruncationPolicyConfig;
 use orbit_code_protocol::openai_models::default_input_modalities;
 use orbit_code_protocol::protocol::AskForApproval;
@@ -55,6 +56,11 @@ fn test_model_info(
         input_modalities,
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
         priority: 1,
         upgrade: None,
         base_instructions: "base instructions".to_string(),
@@ -850,6 +856,11 @@ async fn model_switch_to_smaller_model_updates_token_context_window() -> Result<
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: false,
         supports_search_tool: false,
+        thinking_style: ThinkingStyle::Budgeted,
+        supports_effort: false,
+        supports_effort_max: false,
+        requires_extended_context_beta: false,
+        max_output_tokens: None,
         priority: 1,
         upgrade: None,
         base_instructions: "base instructions".to_string(),

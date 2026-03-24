@@ -2644,6 +2644,7 @@ mod tests {
             initial_messages: None,
             network_proxy: None,
             rollout_path: Some(PathBuf::new()),
+            model_context_window: None,
         }
     }
 
