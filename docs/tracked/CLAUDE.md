@@ -19,4 +19,11 @@ Contains 3 subdirectories (audited, done, todo).
 
 ## Todo
 
+- `fix-50-preexisting-test-failures.md` — Fix 50 pre-existing test failures (binary resolution, schema, rate limits, skills scope, flaky tests)
 - `fork-trimming-remove-openai-distribution.md` — Fork trimming: remove OpenAI distribution
+- `hooks/permission-modes-decouple-sandbox-from-approval.md` — **IMPLEMENT NOW** — Permission modes: decouple sandbox from approval, add Default/Accept/Bypass modes
+- `hooks/hooks-expansion-pretooluse-posttooluse-permissionrequest.md` — **IMPLEMENT NOW (Phase 1 only)** — Merged overview + system design for hooks expansion
+- `hooks/01-phase1-agentic-loop.md` — **IMPLEMENT NOW** — Phase 1 detail: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest (exact Rust code)
+- `hooks/02-phase2-session-lifecycle.md` — FUTURE — Phase 2: SessionEnd, SubagentStart/Stop, StopFailure, Notification
+- `hooks/03-phase3-advanced-handlers.md` — FUTURE — Phase 3: HTTP hooks, async hooks, ConfigChange, InstructionsLoaded
+- `hooks/04-phase4-remaining-events.md` — FUTURE — Phase 4: Prompt/agent hooks, PreCompact, WorktreeCreate, Elicitation, etc.
