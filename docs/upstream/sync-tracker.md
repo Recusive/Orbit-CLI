@@ -17,7 +17,8 @@
 | Phase 1B | Wire into workspace | 1 | DONE |
 | Phase 1C | New feature crates (8) | 76 | DONE |
 | Phase 2A | Foundation + utility files | 49 | DONE |
-| Phase 2B | Core + TUI + app-server files | ~182 | TODO |
+| Phase 2B-1 | Core + app-server-protocol files | 60 | DONE |
+| Phase 2B-2 | TUI files (61 snap + 20 src) | 81 | DONE |
 | Phase 3 | Easy conflict files (≤20 lines) | ~339 | TODO |
 | Phase 4 | Medium conflict files (21-100 lines) | ~262 | TODO |
 | Phase 5 | Hard conflict files (>100 lines) | ~83 | TODO |
