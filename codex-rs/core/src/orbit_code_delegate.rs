@@ -103,14 +103,14 @@ pub(crate) async fn run_orbit_code_thread_interactive(
     // routing them to the parent session for decisions.
     let parent_session_clone = Arc::clone(&parent_session);
     let parent_ctx_clone = Arc::clone(&parent_ctx);
-    let orbit_code_for_events = Arc::clone(&codex);
+    let codex_for_events = Arc::clone(&codex);
     // Cache delegated MCP invocations so guardian can recover the full tool call
     // context when the later legacy RequestUserInput approval event only carries
     // a call_id plus approval question metadata.
     let pending_mcp_invocations = Arc::new(Mutex::new(HashMap::<String, McpInvocation>::new()));
     tokio::spawn(async move {
         forward_events(
-            orbit_code_for_events,
+            codex_for_events,
             tx_sub,
             parent_session_clone,
             parent_ctx_clone,
@@ -121,9 +121,9 @@ pub(crate) async fn run_orbit_code_thread_interactive(
     });
 
     // Forward ops from the caller to the sub-agent.
-    let orbit_code_for_ops = Arc::clone(&codex);
+    let codex_for_ops = Arc::clone(&codex);
     tokio::spawn(async move {
-        forward_ops(orbit_code_for_ops, rx_ops, cancel_token_ops).await;
+        forward_ops(codex_for_ops, rx_ops, cancel_token_ops).await;
     });
 
     Ok(Codex {
@@ -433,8 +433,8 @@ async fn handle_exec_approval(
         network_approval_context,
         proposed_execpolicy_amendment,
         additional_permissions,
-        skill_metadata,
         available_decisions,
+        skill_metadata,
         ..
     } = event;
     let decision = if routes_approval_to_guardian(parent_ctx) {
@@ -518,7 +518,7 @@ async fn handle_patch_approval(
         let change_count = changes.len();
         let maybe_files = changes
             .keys()
-            .map(|path| AbsolutePathBuf::from_absolute_path(parent_ctx.cwd.join(path)).ok())
+            .map(|path| AbsolutePathBuf::try_from(parent_ctx.cwd.join(path)).ok())
             .collect::<Option<Vec<_>>>();
         if let Some(files) = maybe_files {
             let review_cancel = cancel_token.child_token();
@@ -554,7 +554,7 @@ async fn handle_patch_approval(
                 Arc::clone(parent_ctx),
                 GuardianApprovalRequest::ApplyPatch {
                     id: approval_id.clone(),
-                    cwd: parent_ctx.cwd.clone(),
+                    cwd: parent_ctx.cwd.to_path_buf(),
                     files,
                     change_count,
                     patch,
@@ -851,5 +851,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "orbit_code_delegate_tests.rs"]
+#[path = "codex_delegate_tests.rs"]
 mod tests;

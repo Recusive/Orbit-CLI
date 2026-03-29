@@ -51,4 +51,5 @@ pub use remote::fetch_remote_featured_plugin_ids;
 pub(crate) use render::render_explicit_plugin_instructions;
 pub(crate) use render::render_plugins_section;
 pub use store::PluginId;
+pub use store::PluginIdError;
 pub use toggles::collect_plugin_enabled_candidates;

@@ -3,25 +3,19 @@ use crate::compact::InitialContextInjection;
 use crate::config_loader::ConfigLayerEntry;
 use crate::config_loader::ConfigRequirements;
 use crate::config_loader::ConfigRequirementsToml;
+use crate::exec::ExecCapturePolicy;
 use crate::exec::ExecParams;
 use crate::exec_policy::ExecPolicyManager;
-use crate::features::Feature;
 use crate::guardian::GUARDIAN_REVIEWER_NAME;
 use crate::protocol::AskForApproval;
 use crate::sandboxing::SandboxPermissions;
 use crate::tools::context::FunctionToolOutput;
 use crate::turn_diff_tracker::TurnDiffTracker;
-use core_test_support::orbit_code_linux_sandbox_exe_or_skip;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
 use orbit_code_app_server_protocol::ConfigLayerSource;
 use orbit_code_execpolicy::Decision;
 use orbit_code_execpolicy::Evaluation;
 use orbit_code_execpolicy::RuleMatch;
+use orbit_code_features::Feature;
 use orbit_code_protocol::models::ContentItem;
 use orbit_code_protocol::models::NetworkPermissions;
 use orbit_code_protocol::models::PermissionProfile;
@@ -29,7 +23,15 @@ use orbit_code_protocol::models::ResponseItem;
 use orbit_code_protocol::models::function_call_output_content_items_to_text;
 use orbit_code_protocol::permissions::FileSystemSandboxPolicy;
 use orbit_code_protocol::permissions::NetworkSandboxPolicy;
-use orbit_code_utils_absolute_path::AbsolutePathBuf;
+use core_test_support::PathExt;
+use core_test_support::TempDirExt;
+use core_test_support::orbit_code_linux_sandbox_exe_or_skip;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -67,7 +69,7 @@ async fn guardian_allows_shell_additional_permissions_requests_past_policy_valid
     .await;
 
     let (mut session, mut turn_context_raw) = make_session_and_context().await;
-    turn_context_raw.orbit_code_linux_sandbox_exe = orbit_code_linux_sandbox_exe_or_skip!();
+    turn_context_raw.codex_linux_sandbox_exe = orbit_code_linux_sandbox_exe_or_skip!();
     turn_context_raw
         .approval_policy
         .set(AskForApproval::OnRequest)
@@ -95,7 +97,7 @@ async fn guardian_allows_shell_additional_permissions_requests_past_policy_valid
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     let config = Arc::new(config);
     let models_manager = Arc::new(crate::test_support::models_manager_with_provider(
-        config.orbit_code_home.clone(),
+        config.codex_home.clone(),
         Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     ));
@@ -122,8 +124,9 @@ async fn guardian_allows_shell_additional_permissions_requests_past_policy_valid
                 "echo hi".to_string(),
             ]
         },
-        cwd: turn_context.cwd.clone(),
+        cwd: turn_context.cwd.to_path_buf(),
         expiration: expiration_ms.into(),
+        capture_policy: ExecCapturePolicy::ShellTool,
         env: HashMap::new(),
         network: None,
         sandbox_permissions: SandboxPermissions::WithAdditionalPermissions,
@@ -156,7 +159,6 @@ async fn guardian_allows_shell_additional_permissions_requests_past_policy_valid
                             enabled: Some(true),
                         }),
                         file_system: None,
-                        macos: None,
                     },
                     "justification": params.justification.clone(),
                 })
@@ -230,7 +232,7 @@ async fn guardian_allows_unified_exec_additional_permissions_requests_past_polic
 
     assert_eq!(
         output,
-        "missing `additional_permissions`; provide at least one of `network`, `file_system`, or `macos` when using `with_additional_permissions`"
+        "missing `additional_permissions`; provide at least one of `network` or `file_system` when using `with_additional_permissions`"
     );
 }
 
@@ -375,7 +377,7 @@ async fn shell_handler_allows_sticky_turn_permissions_without_inline_request_per
 
 #[tokio::test]
 async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
-    let orbit_code_home = tempdir().expect("create codex home");
+    let codex_home = tempdir().expect("create codex home");
     let project_dir = tempdir().expect("create project dir");
     let rules_dir = project_dir.path().join("rules");
     fs::create_dir_all(&rules_dir).expect("create rules dir");
@@ -385,13 +387,12 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
     )
     .expect("write policy file");
 
-    let mut config = build_test_config(orbit_code_home.path()).await;
-    config.cwd = project_dir.path().to_path_buf();
+    let mut config = build_test_config(codex_home.path()).await;
+    config.cwd = project_dir.abs();
     config.config_layer_stack = ConfigLayerStack::new(
         vec![ConfigLayerEntry::new(
             ConfigLayerSource::Project {
-                dot_orbit_code_folder: AbsolutePathBuf::from_absolute_path(project_dir.path())
-                    .expect("absolute project path"),
+                dot_codex_folder: project_dir.path().abs(),
             },
             toml::Value::Table(Default::default()),
         )],
@@ -421,15 +422,15 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
 
     let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
     let models_manager = Arc::new(ModelsManager::new(
-        config.orbit_code_home.clone(),
+        config.codex_home.clone(),
         auth_manager.clone(),
-        None,
+        /*model_catalog*/ None,
+        CollaborationModesConfig::default(),
     ));
-    let plugins_manager = Arc::new(PluginsManager::new(config.orbit_code_home.clone()));
+    let plugins_manager = Arc::new(PluginsManager::new(config.codex_home.clone()));
     let skills_manager = Arc::new(SkillsManager::new(
-        config.orbit_code_home.clone(),
-        Arc::clone(&plugins_manager),
-        true,
+        config.codex_home.clone(),
+        /*bundled_skills_enabled*/ true,
     ));
     let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
     let file_watcher = Arc::new(FileWatcher::noop());
