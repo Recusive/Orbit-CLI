@@ -93,8 +93,8 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
     // Send a "codex" tool request, which should hit the responses endpoint.
     // In turn, it should reply with a tool call, which the MCP should forward
     // as an elicitation.
-    let orbit_code_request_id = mcp_process
-        .send_orbit_code_tool_call(CodexToolCallParam {
+    let codex_request_id = mcp_process
+        .send_codex_tool_call(CodexToolCallParam {
             prompt: "run `git init`".to_string(),
             ..Default::default()
         })
@@ -121,8 +121,8 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
         Some(create_expected_elicitation_request_params(
             expected_shell_command,
             workdir_for_shell_function_call.path(),
-            orbit_code_request_id.to_string(),
-            params.orbit_code_event_id.clone(),
+            codex_request_id.to_string(),
+            params.codex_event_id.clone(),
             params.thread_id,
         )?)
     );
@@ -148,15 +148,15 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
     .expect("task_complete_notification resp");
 
     // Verify the original `codex` tool call completes and that the file was created.
-    let orbit_code_response = timeout(
+    let codex_response = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp_process.read_stream_until_response_message(RequestId::Number(orbit_code_request_id)),
+        mcp_process.read_stream_until_response_message(RequestId::Number(codex_request_id)),
     )
     .await??;
     assert_eq!(
         JsonRpcResponse {
             jsonrpc: JsonRpcVersion2_0,
-            id: RequestId::Number(orbit_code_request_id),
+            id: RequestId::Number(codex_request_id),
             result: json!({
                 "content": [
                     {
@@ -170,7 +170,7 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
                 }
             }),
         },
-        orbit_code_response
+        codex_response
     );
 
     assert!(created_file.is_file(), "created file should exist");
@@ -181,8 +181,8 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
 fn create_expected_elicitation_request_params(
     command: Vec<String>,
     workdir: &Path,
-    orbit_code_mcp_tool_call_id: String,
-    orbit_code_event_id: String,
+    codex_mcp_tool_call_id: String,
+    codex_event_id: String,
     thread_id: orbit_code_protocol::ThreadId,
 ) -> anyhow::Result<serde_json::Value> {
     let expected_message = format!(
@@ -190,18 +190,18 @@ fn create_expected_elicitation_request_params(
         shlex::try_join(command.iter().map(std::convert::AsRef::as_ref))?,
         workdir.to_string_lossy()
     );
-    let orbit_code_parsed_cmd = parse_command::parse_command(&command);
+    let codex_parsed_cmd = parse_command::parse_command(&command);
     let params_json = serde_json::to_value(ExecApprovalElicitRequestParams {
         message: expected_message,
         requested_schema: json!({"type":"object","properties":{}}),
         thread_id,
-        orbit_code_elicitation: "exec-approval".to_string(),
-        orbit_code_mcp_tool_call_id,
-        orbit_code_event_id,
-        orbit_code_command: command,
-        orbit_code_cwd: workdir.to_path_buf(),
-        orbit_code_call_id: "call1234".to_string(),
-        orbit_code_parsed_cmd,
+        codex_elicitation: "exec-approval".to_string(),
+        codex_mcp_tool_call_id,
+        codex_event_id,
+        codex_command: command,
+        codex_cwd: workdir.to_path_buf(),
+        codex_call_id: "call1234".to_string(),
+        codex_parsed_cmd,
     })?;
     Ok(params_json)
 }
@@ -249,8 +249,8 @@ async fn patch_approval_triggers_elicitation() -> anyhow::Result<()> {
     .await?;
 
     // Send a "codex" tool request that will trigger the apply_patch command
-    let orbit_code_request_id = mcp_process
-        .send_orbit_code_tool_call(CodexToolCallParam {
+    let codex_request_id = mcp_process
+        .send_codex_tool_call(CodexToolCallParam {
             cwd: Some(cwd.path().to_string_lossy().to_string()),
             prompt: "please modify the test file".to_string(),
             ..Default::default()
@@ -287,10 +287,10 @@ async fn patch_approval_triggers_elicitation() -> anyhow::Result<()> {
         elicitation_request.request.params,
         Some(create_expected_patch_approval_elicitation_request_params(
             expected_changes,
-            None, // No grant_root expected
-            None, // No reason expected
-            orbit_code_request_id.to_string(),
-            params.orbit_code_event_id.clone(),
+            /*grant_root*/ None, // No grant_root expected
+            /*reason*/ None, // No reason expected
+            codex_request_id.to_string(),
+            params.codex_event_id.clone(),
             params.thread_id,
         )?)
     );
@@ -306,15 +306,15 @@ async fn patch_approval_triggers_elicitation() -> anyhow::Result<()> {
         .await?;
 
     // Verify the original `codex` tool call completes
-    let orbit_code_response = timeout(
+    let codex_response = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp_process.read_stream_until_response_message(RequestId::Number(orbit_code_request_id)),
+        mcp_process.read_stream_until_response_message(RequestId::Number(codex_request_id)),
     )
     .await??;
     assert_eq!(
         JsonRpcResponse {
             jsonrpc: JsonRpcVersion2_0,
-            id: RequestId::Number(orbit_code_request_id),
+            id: RequestId::Number(codex_request_id),
             result: json!({
                 "content": [
                     {
@@ -328,7 +328,7 @@ async fn patch_approval_triggers_elicitation() -> anyhow::Result<()> {
                 }
             }),
         },
-        orbit_code_response
+        codex_response
     );
 
     let file_contents = std::fs::read_to_string(test_file.as_path())?;
@@ -338,7 +338,7 @@ async fn patch_approval_triggers_elicitation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_orbit_code_tool_passes_base_instructions() {
+async fn test_codex_tool_passes_base_instructions() {
     skip_if_no_network!();
 
     // Apparently `#[tokio::test]` must return `()`, so we create a helper
@@ -356,14 +356,14 @@ async fn orbit_code_tool_passes_base_instructions() -> anyhow::Result<()> {
             .await;
 
     // Run `codex mcp` with a specific config.toml.
-    let orbit_code_home = TempDir::new()?;
-    create_config_toml(orbit_code_home.path(), &server.uri())?;
-    let mut mcp_process = McpProcess::new(orbit_code_home.path()).await?;
+    let codex_home = TempDir::new()?;
+    create_config_toml(codex_home.path(), &server.uri())?;
+    let mut mcp_process = McpProcess::new(codex_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp_process.initialize()).await??;
 
     // Send a "codex" tool request, which should hit the responses endpoint.
-    let orbit_code_request_id = mcp_process
-        .send_orbit_code_tool_call(CodexToolCallParam {
+    let codex_request_id = mcp_process
+        .send_codex_tool_call(CodexToolCallParam {
             prompt: "How are you?".to_string(),
             base_instructions: Some("You are a helpful assistant.".to_string()),
             developer_instructions: Some("Foreshadow upcoming tool calls.".to_string()),
@@ -371,18 +371,15 @@ async fn orbit_code_tool_passes_base_instructions() -> anyhow::Result<()> {
         })
         .await?;
 
-    let orbit_code_response = timeout(
+    let codex_response = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp_process.read_stream_until_response_message(RequestId::Number(orbit_code_request_id)),
+        mcp_process.read_stream_until_response_message(RequestId::Number(codex_request_id)),
     )
     .await??;
-    assert_eq!(orbit_code_response.jsonrpc, JsonRpcVersion2_0);
+    assert_eq!(codex_response.jsonrpc, JsonRpcVersion2_0);
+    assert_eq!(codex_response.id, RequestId::Number(codex_request_id));
     assert_eq!(
-        orbit_code_response.id,
-        RequestId::Number(orbit_code_request_id)
-    );
-    assert_eq!(
-        orbit_code_response.result,
+        codex_response.result,
         json!({
             "content": [
                 {
@@ -391,7 +388,7 @@ async fn orbit_code_tool_passes_base_instructions() -> anyhow::Result<()> {
                 }
             ],
             "structuredContent": {
-                "threadId": orbit_code_response
+                "threadId": codex_response
                     .result
                     .get("structuredContent")
                     .and_then(|v| v.get("threadId"))
@@ -440,8 +437,8 @@ fn create_expected_patch_approval_elicitation_request_params(
     changes: HashMap<PathBuf, FileChange>,
     grant_root: Option<PathBuf>,
     reason: Option<String>,
-    orbit_code_mcp_tool_call_id: String,
-    orbit_code_event_id: String,
+    codex_mcp_tool_call_id: String,
+    codex_event_id: String,
     thread_id: orbit_code_protocol::ThreadId,
 ) -> anyhow::Result<serde_json::Value> {
     let mut message_lines = Vec::new();
@@ -453,13 +450,13 @@ fn create_expected_patch_approval_elicitation_request_params(
         message: message_lines.join("\n"),
         requested_schema: json!({"type":"object","properties":{}}),
         thread_id,
-        orbit_code_elicitation: "patch-approval".to_string(),
-        orbit_code_mcp_tool_call_id,
-        orbit_code_event_id,
-        orbit_code_reason: reason,
-        orbit_code_grant_root: grant_root,
-        orbit_code_changes: changes,
-        orbit_code_call_id: "call1234".to_string(),
+        codex_elicitation: "patch-approval".to_string(),
+        codex_mcp_tool_call_id,
+        codex_event_id,
+        codex_reason: reason,
+        codex_grant_root: grant_root,
+        codex_changes: changes,
+        codex_call_id: "call1234".to_string(),
     })?;
 
     Ok(params_json)
@@ -479,24 +476,24 @@ pub struct McpHandle {
 
 async fn create_mcp_process(responses: Vec<String>) -> anyhow::Result<McpHandle> {
     let server = create_mock_responses_server(responses).await;
-    let orbit_code_home = TempDir::new()?;
-    create_config_toml(orbit_code_home.path(), &server.uri())?;
-    let mut mcp_process = McpProcess::new(orbit_code_home.path()).await?;
+    let codex_home = TempDir::new()?;
+    create_config_toml(codex_home.path(), &server.uri())?;
+    let mut mcp_process = McpProcess::new(codex_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp_process.initialize()).await??;
     Ok(McpHandle {
         process: mcp_process,
         server,
-        dir: orbit_code_home,
+        dir: codex_home,
     })
 }
 
 /// Create a Codex config that uses the mock server as the model provider.
 /// It also uses `approval_policy = "untrusted"` so that we exercise the
 /// elicitation code path for shell commands.
-fn create_config_toml(orbit_code_home: &Path, server_uri: &str) -> std::io::Result<()> {
-    let config_toml = orbit_code_home.join("config.toml");
+fn create_config_toml(codex_home: &Path, server_uri: &str) -> std::io::Result<()> {
+    let config_toml = codex_home.join("config.toml");
     std::fs::write(
-        &config_toml,
+        config_toml,
         format!(
             r#"
 model = "mock-model"
@@ -504,7 +501,6 @@ approval_policy = "untrusted"
 sandbox_policy = "workspace-write"
 
 model_provider = "mock_provider"
-cli_auth_credentials_store = "file"
 
 [model_providers.mock_provider]
 name = "Mock provider for test"
@@ -516,13 +512,5 @@ stream_max_retries = 0
 [features]
 "#
         ),
-    )?;
-
-    // Write a dummy v2 auth.json so the MCP server can make API requests
-    // to the mock provider without requiring real credentials.
-    let auth_json = orbit_code_home.join("auth.json");
-    std::fs::write(
-        auth_json,
-        r#"{"version":2,"providers":{"openai":{"type":"openai_api_key","key":"test-key"}}}"#,
     )
 }

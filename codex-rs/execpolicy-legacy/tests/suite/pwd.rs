@@ -1,4 +1,4 @@
-extern crate orbit_code_execpolicy_legacy;
+extern crate codex_execpolicy_legacy;
 
 use std::vec;
 

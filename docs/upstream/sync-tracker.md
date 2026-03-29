@@ -16,7 +16,8 @@
 | Phase 1A | New utility crates (5) | 28 | DONE |
 | Phase 1B | Wire into workspace | 1 | DONE |
 | Phase 1C | New feature crates (8) | 76 | DONE |
-| Phase 2 | Upstream-only modified files | ~245 | TODO |
+| Phase 2A | Foundation + utility files | 49 | DONE |
+| Phase 2B | Core + TUI + app-server files | ~182 | TODO |
 | Phase 3 | Easy conflict files (≤20 lines) | ~339 | TODO |
 | Phase 4 | Medium conflict files (21-100 lines) | ~262 | TODO |
 | Phase 5 | Hard conflict files (>100 lines) | ~83 | TODO |
@@ -55,11 +56,11 @@
 
 ## Technical Debt
 
-### DEBT-001: output-truncation inlined helpers
+### ~~DEBT-001: output-truncation inlined helpers~~ RESOLVED in Phase 2A
 
 **File:** `codex-rs/utils/output-truncation/src/lib.rs`
-**Priority:** Medium
-**Fix in:** Phase 2-3 (when syncing `utils/string` and `protocol`)
+**Status:** RESOLVED — `utils/string` now has the required functions
+**Resolved in:** Phase 2A (2026-03-29)
 
 Upstream's `output-truncation` imports these from `codex-utils-string`:
 - `approx_token_count()`

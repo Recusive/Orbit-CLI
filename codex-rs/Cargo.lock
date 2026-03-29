@@ -452,9 +452,9 @@ dependencies = [
 
 [[package]]
 name = "arc-swap"
-version = "1.8.2"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f3647c145568cec02c42054e07bdf9a5a698e15b466fb2341bfc393cd24aa5"
+checksum = "a07d1f37ff60921c83bdfc7407723bdefe89b44b98a9b772f225c8f9d67141a6"
 dependencies = [
  "rustversion",
 ]
@@ -5772,6 +5772,8 @@ name = "orbit-code-exec-server"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
+ "base64 0.22.1",
  "clap",
  "futures",
  "orbit-code-app-server-protocol",
@@ -6162,6 +6164,7 @@ dependencies = [
  "orbit-code-utils-absolute-path",
  "orbit-code-utils-image",
  "pretty_assertions",
+ "quick-xml",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -7326,6 +7329,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
 dependencies = [
  "memchr",
+ "serde",
 ]
 
 [[package]]

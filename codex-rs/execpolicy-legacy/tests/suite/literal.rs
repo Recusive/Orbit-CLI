@@ -7,7 +7,7 @@ use orbit_code_execpolicy_legacy::PolicyParser;
 use orbit_code_execpolicy_legacy::Result;
 use orbit_code_execpolicy_legacy::ValidExec;
 
-extern crate orbit_code_execpolicy_legacy;
+extern crate codex_execpolicy_legacy;
 
 #[test]
 fn test_invalid_subcommand() -> Result<()> {
@@ -25,9 +25,13 @@ define_program(
             exec: ValidExec::new(
                 "fake_executable",
                 vec![
-                    MatchedArg::new(0, ArgType::Literal("subcommand".to_string()), "subcommand")?,
                     MatchedArg::new(
-                        1,
+                        /*index*/ 0,
+                        ArgType::Literal("subcommand".to_string()),
+                        "subcommand"
+                    )?,
+                    MatchedArg::new(
+                        /*index*/ 1,
                         ArgType::Literal("sub-subcommand".to_string()),
                         "sub-subcommand"
                     )?,

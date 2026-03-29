@@ -4438,6 +4438,17 @@ impl From<CoreTurnItem> for ThreadItem {
                 id: user.id,
                 content: user.content.into_iter().map(UserInput::from).collect(),
             },
+            CoreTurnItem::HookPrompt(prompt) => ThreadItem::UserMessage {
+                id: prompt.id,
+                content: prompt
+                    .fragments
+                    .into_iter()
+                    .map(|fragment| UserInput::Text {
+                        text: fragment.text,
+                        text_elements: Vec::new(),
+                    })
+                    .collect(),
+            },
             CoreTurnItem::AgentMessage(agent) => {
                 let text = agent
                     .content

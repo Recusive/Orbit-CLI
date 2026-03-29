@@ -127,10 +127,7 @@ pub async fn run_orbit_code_tool_session(
         );
         outgoing.send_response(id.clone(), result).await;
         // unregister the id so we don't keep it in the map
-        running_requests_id_to_orbit_code_uuid
-            .lock()
-            .await
-            .remove(&id);
+        running_requests_id_to_orbit_code_uuid.lock().await.remove(&id);
         return;
     }
 
@@ -231,8 +228,8 @@ async fn run_orbit_code_tool_session_inner(
                             parsed_cmd,
                             network_approval_context: _,
                             additional_permissions: _,
-                            skill_metadata: _,
                             available_decisions: _,
+                            skill_metadata: _,
                         } = ev;
                         handle_exec_approval_request(
                             command,
@@ -340,7 +337,6 @@ async fn run_orbit_code_tool_session_inner(
                     | EventMsg::McpToolCallBegin(_)
                     | EventMsg::McpToolCallEnd(_)
                     | EventMsg::McpListToolsResponse(_)
-                    | EventMsg::ListCustomPromptsResponse(_)
                     | EventMsg::ListSkillsResponse(_)
                     | EventMsg::ExecCommandBegin(_)
                     | EventMsg::TerminalInteraction(_)
@@ -394,6 +390,7 @@ async fn run_orbit_code_tool_session_inner(
                     | EventMsg::RealtimeConversationStarted(_)
                     | EventMsg::RealtimeConversationRealtime(_)
                     | EventMsg::RealtimeConversationClosed(_)
+                    | EventMsg::ListCustomPromptsResponse(_)
                     | EventMsg::DeprecationNotice(_) => {
                         // For now, we do not do anything extra for these
                         // events. Note that
@@ -425,7 +422,11 @@ mod tests {
     #[test]
     fn call_tool_result_includes_thread_id_in_structured_content() {
         let thread_id = ThreadId::new();
-        let result = create_call_tool_result_with_thread_id(thread_id, "done".to_string(), None);
+        let result = create_call_tool_result_with_thread_id(
+            thread_id,
+            "done".to_string(),
+            /*is_error*/ None,
+        );
         assert_eq!(
             result.structured_content,
             Some(json!({

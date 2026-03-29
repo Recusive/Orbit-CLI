@@ -1,4 +1,4 @@
-extern crate orbit_code_execpolicy_legacy;
+extern crate codex_execpolicy_legacy;
 
 use orbit_code_execpolicy_legacy::ArgMatcher;
 use orbit_code_execpolicy_legacy::ArgType;
@@ -53,8 +53,8 @@ fn test_cp_one_file() -> Result<()> {
             exec: ValidExec::new(
                 "cp",
                 vec![
-                    MatchedArg::new(0, ArgType::ReadableFile, "foo/bar")?,
-                    MatchedArg::new(1, ArgType::WriteableFile, "../baz")?,
+                    MatchedArg::new(/*index*/ 0, ArgType::ReadableFile, "foo/bar")?,
+                    MatchedArg::new(/*index*/ 1, ArgType::WriteableFile, "../baz")?,
                 ],
                 &["/bin/cp", "/usr/bin/cp"]
             )
@@ -73,9 +73,9 @@ fn test_cp_multiple_files() -> Result<()> {
             exec: ValidExec::new(
                 "cp",
                 vec![
-                    MatchedArg::new(0, ArgType::ReadableFile, "foo")?,
-                    MatchedArg::new(1, ArgType::ReadableFile, "bar")?,
-                    MatchedArg::new(2, ArgType::WriteableFile, "baz")?,
+                    MatchedArg::new(/*index*/ 0, ArgType::ReadableFile, "foo")?,
+                    MatchedArg::new(/*index*/ 1, ArgType::ReadableFile, "bar")?,
+                    MatchedArg::new(/*index*/ 2, ArgType::WriteableFile, "baz")?,
                 ],
                 &["/bin/cp", "/usr/bin/cp"]
             )

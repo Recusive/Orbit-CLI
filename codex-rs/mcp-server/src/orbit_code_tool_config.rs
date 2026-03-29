@@ -47,7 +47,7 @@ pub struct CodexToolCallParam {
     pub sandbox: Option<CodexToolCallSandboxMode>,
 
     /// Individual config settings that will override what is in
-    /// ORBIT_HOME/config.toml.
+    /// CODEX_HOME/config.toml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config: Option<HashMap<String, serde_json::Value>>,
 
@@ -176,7 +176,7 @@ impl CodexToolCallParam {
             cwd: cwd.map(PathBuf::from),
             approval_policy: approval_policy.map(Into::into),
             sandbox_mode: sandbox.map(Into::into),
-            orbit_code_linux_sandbox_exe: arg0_paths.orbit_code_linux_sandbox_exe.clone(),
+                        orbit_code_linux_sandbox_exe: arg0_paths.orbit_code_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
             base_instructions,
             developer_instructions,
@@ -298,7 +298,7 @@ mod tests {
     /// As of 2025-05-04, there is an open PR for this:
     /// https://github.com/modelcontextprotocol/inspector/pull/196
     #[test]
-    fn verify_orbit_code_tool_json_schema() {
+    fn verify_codex_tool_json_schema() {
         let tool = create_tool_for_orbit_code_tool_call_param();
         let tool_json = serde_json::to_value(&tool).expect("tool serializes");
         let expected_tool_json = serde_json::json!({
@@ -325,7 +325,7 @@ mod tests {
               },
               "config": {
                 "additionalProperties": true,
-                "description": "Individual config settings that will override what is in ORBIT_HOME/config.toml.",
+                "description": "Individual config settings that will override what is in CODEX_HOME/config.toml.",
                 "type": "object"
               },
               "cwd": {
@@ -385,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_orbit_code_tool_reply_json_schema() {
+    fn verify_codex_tool_reply_json_schema() {
         let tool = create_tool_for_orbit_code_tool_call_reply_param();
         let tool_json = serde_json::to_value(&tool).expect("tool serializes");
         let expected_tool_json = serde_json::json!({

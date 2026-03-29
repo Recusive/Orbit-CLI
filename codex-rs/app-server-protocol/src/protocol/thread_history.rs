@@ -281,6 +281,7 @@ impl ThreadHistoryBuilder {
                 );
             }
             orbit_code_protocol::items::TurnItem::UserMessage(_)
+            | orbit_code_protocol::items::TurnItem::HookPrompt(_)
             | orbit_code_protocol::items::TurnItem::AgentMessage(_)
             | orbit_code_protocol::items::TurnItem::Reasoning(_)
             | orbit_code_protocol::items::TurnItem::WebSearch(_)
@@ -301,6 +302,7 @@ impl ThreadHistoryBuilder {
                 );
             }
             orbit_code_protocol::items::TurnItem::UserMessage(_)
+            | orbit_code_protocol::items::TurnItem::HookPrompt(_)
             | orbit_code_protocol::items::TurnItem::AgentMessage(_)
             | orbit_code_protocol::items::TurnItem::Reasoning(_)
             | orbit_code_protocol::items::TurnItem::WebSearch(_)
