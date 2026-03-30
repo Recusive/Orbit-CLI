@@ -23,7 +23,9 @@
 
 [OpenAI Codex CLI](https://github.com/openai/codex) is a great terminal coding agent — but it only works with OpenAI models. We forked it to build [Orbit](https://orbit.build), an AI-native development environment, and needed the terminal agent to work with **Anthropic Claude** as a first-class provider.
 
-**We've since pivoted away from Orbit and are open-sourcing all of this work.** Everything we built on top of Codex is now free for anyone to use, extend, and contribute to.
+After months of working with Codex as our engine layer, we've decided to build our own from scratch. We tried Codex, OpenCode, and similar projects — they all have fundamental gaps in provider abstraction, approval pipelines, and extensibility that would require a full rewrite to fill properly. Rather than keep patching, we're starting fresh.
+
+**Orbit is still shipping.** We're open-sourcing this fork because we're no longer using it as our engine, and the work we did here — Claude support, multi-provider auth, thinking display — shouldn't go to waste. Take it, use it, build on it.
 
 ---
 
@@ -234,6 +236,6 @@ Upstream Codex code is also Apache 2.0 licensed.
 ---
 
 <p align="center">
-  Originally built by <a href="https://orbit.build">Recursive Labs</a> for Orbit.<br/>
-  Now open source. Use it, fork it, make it yours.
+  Built by <a href="https://orbit.build">Recursive Labs</a>, the team behind <a href="https://orbit.build">Orbit</a>.<br/>
+  We moved to a custom engine. This fork is now open source — use it, extend it, make it yours.
 </p>
