@@ -42,6 +42,7 @@ use crate::skills::loader::load_skills_from_roots;
 use orbit_code_analytics::AnalyticsEventsClient;
 use orbit_code_app_server_protocol::ConfigValueWriteParams;
 use orbit_code_app_server_protocol::MergeStrategy;
+use orbit_code_protocol::protocol::Product;
 use orbit_code_protocol::protocol::SkillScope;
 use orbit_code_utils_absolute_path::AbsolutePathBuf;
 use serde::Deserialize;
@@ -512,6 +513,15 @@ impl PluginsManager {
         }
     }
 
+    pub fn new_with_restriction_product(
+        orbit_code_home: PathBuf,
+        _restriction_product: Option<Product>,
+    ) -> Self {
+        // TODO(upstream-0.118.0): honor product restrictions once the extracted
+        // plugin-type refactor lands on this branch.
+        Self::new(orbit_code_home)
+    }
+
     pub fn set_analytics_events_client(&self, analytics_events_client: AnalyticsEventsClient) {
         let mut stored_client = match self.analytics_events_client.write() {
             Ok(client_guard) => client_guard,
@@ -558,6 +568,18 @@ impl PluginsManager {
         };
         *featured_plugin_ids_cache = None;
         *cached_enabled_outcome = None;
+    }
+
+    pub fn effective_skill_roots_for_layer_stack(
+        &self,
+        config_layer_stack: &ConfigLayerStack,
+        plugins_feature_enabled: bool,
+    ) -> Vec<PathBuf> {
+        if !plugins_feature_enabled {
+            return Vec::new();
+        }
+
+        load_plugins_from_layer_stack(config_layer_stack, &self.store).effective_skill_roots()
     }
 
     fn cached_enabled_outcome(&self) -> Option<PluginLoadOutcome> {
@@ -1132,6 +1154,14 @@ impl PluginsManager {
         }
     }
 
+    pub fn maybe_start_plugin_startup_tasks_for_config(
+        self: &Arc<Self>,
+        config: &Config,
+        auth_manager: Arc<AuthManager>,
+    ) {
+        self.maybe_start_curated_repo_sync_for_config(config, auth_manager);
+    }
+
     fn start_curated_repo_sync(self: &Arc<Self>, configured_curated_plugin_ids: Vec<PluginId>) {
         if CURATED_REPO_SYNC_STARTED.swap(true, Ordering::SeqCst) {
             return;
@@ -1638,6 +1668,22 @@ pub fn plugin_telemetry_metadata_from_root(
             app_connector_ids: load_plugin_apps(plugin_root),
         }),
     }
+}
+
+pub fn load_plugin_mcp_servers(plugin_root: &Path) -> HashMap<String, McpServerConfig> {
+    let Some(manifest) = load_plugin_manifest(plugin_root) else {
+        return HashMap::new();
+    };
+
+    let mut mcp_servers = HashMap::new();
+    for mcp_config_path in plugin_mcp_config_paths(plugin_root, &manifest.paths) {
+        let plugin_mcp = load_mcp_servers_from_file(plugin_root, &mcp_config_path);
+        for (name, config) in plugin_mcp.mcp_servers {
+            mcp_servers.entry(name).or_insert(config);
+        }
+    }
+
+    mcp_servers
 }
 
 pub fn installed_plugin_telemetry_metadata(

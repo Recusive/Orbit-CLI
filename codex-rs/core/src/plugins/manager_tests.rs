@@ -185,6 +185,36 @@ fn load_plugins_loads_default_skills_and_mcp_servers() {
 }
 
 #[test]
+fn load_plugin_mcp_servers_reads_default_mcp_file() {
+    let orbit_code_home = TempDir::new().unwrap();
+    let plugin_root = orbit_code_home
+        .path()
+        .join("plugins/cache")
+        .join("test/sample/local");
+
+    write_file(
+        &plugin_root.join(".codex-plugin/plugin.json"),
+        r#"{"name":"sample"}"#,
+    );
+    write_file(
+        &plugin_root.join(".mcp.json"),
+        r#"{
+  "mcpServers": {
+    "sample": {
+      "type": "http",
+      "url": "https://sample.example/mcp"
+    }
+  }
+}"#,
+    );
+
+    let mcp_servers = load_plugin_mcp_servers(plugin_root.as_path());
+
+    assert_eq!(mcp_servers.len(), 1);
+    assert!(mcp_servers.contains_key("sample"));
+}
+
+#[test]
 fn plugin_telemetry_metadata_uses_default_mcp_config_path() {
     let orbit_code_home = TempDir::new().unwrap();
     let plugin_root = orbit_code_home

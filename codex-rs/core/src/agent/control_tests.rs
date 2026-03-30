@@ -10,6 +10,7 @@ use crate::config_loader::LoaderOverrides;
 use crate::contextual_user_message::SUBAGENT_NOTIFICATION_OPEN_TAG;
 use crate::features::Feature;
 use assert_matches::assert_matches;
+use chrono::Utc;
 use orbit_code_protocol::config_types::ModeKind;
 use orbit_code_protocol::models::ContentItem;
 use orbit_code_protocol::models::ResponseItem;
@@ -141,6 +142,14 @@ async fn wait_for_subagent_notification(parent_thread: &Arc<CodexThread>) -> boo
         }
     };
     timeout(Duration::from_secs(2), wait).await.is_ok()
+}
+
+async fn persist_thread_for_resume(thread: &Arc<CodexThread>, message: &str) {
+    thread
+        .inject_user_message_without_turn(message.to_string())
+        .await;
+    thread.codex.session.ensure_rollout_materialized().await;
+    thread.codex.session.flush_rollout().await;
 }
 
 #[tokio::test]
@@ -1090,6 +1099,65 @@ async fn resume_thread_subagent_restores_stored_nickname_and_role() {
     let _ = harness
         .control
         .shutdown_agent(resumed_thread_id)
+        .await
+        .expect("resumed child shutdown should submit");
+}
+
+#[tokio::test]
+async fn resume_agent_from_rollout_reads_archived_rollout_path() {
+    let harness = AgentControlHarness::new().await;
+    let child_thread_id = harness
+        .control
+        .spawn_agent(harness.config.clone(), text_input("hello"), /*session_source*/ None)
+        .await
+        .expect("child spawn should succeed");
+    let child_thread = harness
+        .manager
+        .get_thread(child_thread_id)
+        .await
+        .expect("child thread should exist");
+    persist_thread_for_resume(&child_thread, "persist before archiving").await;
+
+    let rollout_path = child_thread
+        .rollout_path()
+        .expect("thread should have rollout path");
+    let state_db = child_thread
+        .state_db()
+        .expect("thread should have state db handle");
+
+    let _ = harness
+        .control
+        .shutdown_agent(child_thread_id)
+        .await
+        .expect("child shutdown should submit");
+
+    let archived_root = harness.config.orbit_code_home.join(crate::ARCHIVED_SESSIONS_SUBDIR);
+    tokio::fs::create_dir_all(&archived_root)
+        .await
+        .expect("archived root should exist");
+    let archived_rollout_path = archived_root.join(
+        rollout_path
+            .file_name()
+            .expect("rollout file name should be present"),
+    );
+    tokio::fs::rename(&rollout_path, &archived_rollout_path)
+        .await
+        .expect("rollout should move to archived path");
+    state_db
+        .mark_archived(child_thread_id, archived_rollout_path.as_path(), Utc::now())
+        .await
+        .expect("state db archive update should succeed");
+
+    let resumed_thread_id = harness
+        .control
+        .resume_agent_from_rollout(harness.config.clone(), child_thread_id, SessionSource::Exec)
+        .await
+        .expect("resume should find archived rollout");
+    assert_eq!(resumed_thread_id, child_thread_id);
+
+    let _ = harness
+        .control
+        .shutdown_agent(child_thread_id)
         .await
         .expect("resumed child shutdown should submit");
 }

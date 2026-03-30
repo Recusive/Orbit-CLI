@@ -5,6 +5,8 @@ use crate::agent::role::resolve_role_config;
 use crate::agent::status::is_final;
 use crate::error::CodexErr;
 use crate::error::Result as CodexResult;
+use crate::features::Feature;
+use crate::find_archived_thread_path_by_id_str;
 use crate::find_thread_path_by_id_str;
 use crate::orbit_code_thread::ThreadConfigSnapshot;
 use crate::rollout::RolloutRecorder;
@@ -227,10 +229,16 @@ impl AgentControl {
     /// Resume an existing agent thread from a recorded rollout file.
     pub(crate) async fn resume_agent_from_rollout(
         &self,
-        config: crate::config::Config,
+        mut config: crate::config::Config,
         thread_id: ThreadId,
         session_source: SessionSource,
     ) -> CodexResult<ThreadId> {
+        if let SessionSource::SubAgent(SubAgentSource::ThreadSpawn { depth, .. }) = &session_source
+            && *depth >= config.agent_max_depth
+        {
+            let _ = config.features.disable(Feature::SpawnCsv);
+            let _ = config.features.disable(Feature::Collab);
+        }
         let state = self.upgrade()?;
         let mut reservation = self.state.reserve_spawn_slot(config.agent_max_threads)?;
         let session_source = match session_source {
@@ -280,9 +288,17 @@ impl AgentControl {
             .inherited_exec_policy_for_source(&state, Some(&session_source), &config)
             .await;
         let rollout_path =
-            find_thread_path_by_id_str(config.orbit_code_home.as_path(), &thread_id.to_string())
+            match find_thread_path_by_id_str(config.orbit_code_home.as_path(), &thread_id.to_string())
                 .await?
-                .ok_or_else(|| CodexErr::ThreadNotFound(thread_id))?;
+            {
+                Some(rollout_path) => rollout_path,
+                None => find_archived_thread_path_by_id_str(
+                    config.orbit_code_home.as_path(),
+                    &thread_id.to_string(),
+                )
+                .await?
+                .ok_or_else(|| CodexErr::ThreadNotFound(thread_id))?,
+            };
 
         let resumed_thread = state
             .resume_thread_from_rollout_with_source(
@@ -339,6 +355,16 @@ impl AgentControl {
         let _ = state.remove_thread(&agent_id).await;
         self.state.release_spawned_thread(agent_id);
         result
+    }
+
+    /// Compatibility shim until upstream distinguishes live shutdown from tree-aware close.
+    pub(crate) async fn shutdown_live_agent(&self, agent_id: ThreadId) -> CodexResult<String> {
+        self.shutdown_agent(agent_id).await
+    }
+
+    /// Compatibility shim until upstream close-tree logic lands on this branch.
+    pub(crate) async fn close_agent(&self, agent_id: ThreadId) -> CodexResult<String> {
+        self.shutdown_live_agent(agent_id).await
     }
 
     /// Fetch the last known status for `agent_id`, returning `NotFound` when unavailable.

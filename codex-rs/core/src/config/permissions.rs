@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use orbit_code_network_proxy::NetworkMode;
 use orbit_code_network_proxy::NetworkProxyConfig;
+use orbit_code_network_proxy::normalize_host;
 use orbit_code_protocol::permissions::FileSystemAccessMode;
 use orbit_code_protocol::permissions::FileSystemPath;
 use orbit_code_protocol::permissions::FileSystemSandboxEntry;
@@ -57,6 +58,100 @@ pub enum FilesystemPermissionToml {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+pub struct NetworkDomainPermissionsToml {
+    #[serde(flatten)]
+    pub entries: BTreeMap<String, NetworkDomainPermissionToml>,
+}
+
+impl NetworkDomainPermissionsToml {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn allowed_domains(&self) -> Option<Vec<String>> {
+        let allowed_domains: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|(_, permission)| matches!(permission, NetworkDomainPermissionToml::Allow))
+            .map(|(pattern, _)| pattern.clone())
+            .collect();
+        (!allowed_domains.is_empty()).then_some(allowed_domains)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn denied_domains(&self) -> Option<Vec<String>> {
+        let denied_domains: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|(_, permission)| matches!(permission, NetworkDomainPermissionToml::Deny))
+            .map(|(pattern, _)| pattern.clone())
+            .collect();
+        (!denied_domains.is_empty()).then_some(denied_domains)
+    }
+}
+
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkDomainPermissionToml {
+    Allow,
+    Deny,
+}
+
+impl std::fmt::Display for NetworkDomainPermissionToml {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let permission = match self {
+            Self::Allow => "allow",
+            Self::Deny => "deny",
+        };
+        f.write_str(permission)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+pub struct NetworkUnixSocketPermissionsToml {
+    #[serde(flatten)]
+    pub entries: BTreeMap<String, NetworkUnixSocketPermissionToml>,
+}
+
+impl NetworkUnixSocketPermissionsToml {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub(crate) fn allow_unix_sockets(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .filter(|(_, permission)| {
+                matches!(permission, NetworkUnixSocketPermissionToml::Allow)
+            })
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+}
+
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkUnixSocketPermissionToml {
+    Allow,
+    None,
+}
+
+impl std::fmt::Display for NetworkUnixSocketPermissionToml {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let permission = match self {
+            Self::Allow => "allow",
+            Self::None => "none",
+        };
+        f.write_str(permission)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct NetworkToml {
     pub enabled: Option<bool>,
@@ -69,6 +164,8 @@ pub struct NetworkToml {
     pub dangerously_allow_all_unix_sockets: Option<bool>,
     #[schemars(with = "Option<NetworkModeSchema>")]
     pub mode: Option<NetworkMode>,
+    pub domains: Option<NetworkDomainPermissionsToml>,
+    pub unix_sockets: Option<NetworkUnixSocketPermissionsToml>,
     pub allowed_domains: Option<Vec<String>>,
     pub denied_domains: Option<Vec<String>>,
     pub allow_unix_sockets: Option<Vec<String>>,
@@ -114,6 +211,19 @@ impl NetworkToml {
         if let Some(mode) = self.mode {
             config.network.mode = mode;
         }
+        if let Some(domains) = self.domains.as_ref() {
+            overlay_network_domain_permissions(config, domains);
+        }
+        if let Some(unix_sockets) = self.unix_sockets.as_ref() {
+            let mut allow_unix_sockets = config.network.allow_unix_sockets();
+            for (path, permission) in &unix_sockets.entries {
+                allow_unix_sockets.retain(|entry| entry != path);
+                if matches!(permission, NetworkUnixSocketPermissionToml::Allow) {
+                    allow_unix_sockets.push(path.clone());
+                }
+            }
+            config.network.set_allow_unix_sockets(allow_unix_sockets);
+        }
         if let Some(allowed_domains) = self.allowed_domains.as_ref() {
             config.network.allowed_domains = allowed_domains.clone();
         }
@@ -132,6 +242,31 @@ impl NetworkToml {
         let mut config = NetworkProxyConfig::default();
         self.apply_to_network_proxy_config(&mut config);
         config
+    }
+}
+
+pub(crate) fn overlay_network_domain_permissions(
+    config: &mut NetworkProxyConfig,
+    domains: &NetworkDomainPermissionsToml,
+) {
+    for (pattern, permission) in &domains.entries {
+        let normalized = normalize_host(pattern);
+        config
+            .network
+            .allowed_domains
+            .retain(|entry| normalize_host(entry) != normalized);
+        config
+            .network
+            .denied_domains
+            .retain(|entry| normalize_host(entry) != normalized);
+        match permission {
+            NetworkDomainPermissionToml::Allow => {
+                config.network.allowed_domains.push(pattern.clone());
+            }
+            NetworkDomainPermissionToml::Deny => {
+                config.network.denied_domains.push(pattern.clone());
+            }
+        }
     }
 }
 
@@ -188,6 +323,34 @@ pub(crate) fn compile_permission_profile(
         FileSystemSandboxPolicy::restricted(entries),
         network_sandbox_policy,
     ))
+}
+
+pub(crate) fn get_readable_roots_required_for_codex_runtime(
+    codex_home: &Path,
+    zsh_path: Option<&PathBuf>,
+    main_execve_wrapper_exe: Option<&PathBuf>,
+) -> Vec<AbsolutePathBuf> {
+    let arg0_root = AbsolutePathBuf::from_absolute_path(codex_home.join("tmp").join("arg0")).ok();
+    let zsh_path = zsh_path.and_then(|path| AbsolutePathBuf::from_absolute_path(path).ok());
+    let execve_wrapper_root = main_execve_wrapper_exe.and_then(|path| {
+        let path = AbsolutePathBuf::from_absolute_path(path).ok()?;
+        if let Some(arg0_root) = arg0_root.as_ref()
+            && path.as_path().starts_with(arg0_root.as_path())
+        {
+            path.parent()
+        } else {
+            Some(path)
+        }
+    });
+
+    let mut readable_roots = Vec::new();
+    if let Some(zsh_path) = zsh_path {
+        readable_roots.push(zsh_path);
+    }
+    if let Some(execve_wrapper_root) = execve_wrapper_root {
+        readable_roots.push(execve_wrapper_root);
+    }
+    readable_roots
 }
 
 fn compile_network_sandbox_policy(network: Option<&NetworkToml>) -> NetworkSandboxPolicy {
