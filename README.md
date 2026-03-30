@@ -27,6 +27,8 @@ After months of working with Codex as our engine layer, we've decided to build o
 
 **Orbit is still shipping.** We're open-sourcing this fork because we're no longer using it as our engine, and the work we did here — Claude support, multi-provider auth, thinking display — shouldn't go to waste. Take it, use it, build on it.
 
+Looking for Orbit itself? **[Download the desktop app](https://github.com/Recusive/Orbit-Release)**.
+
 ---
 
 ## What We Added (Features Codex Doesn't Have)
