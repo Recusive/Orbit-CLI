@@ -19,7 +19,7 @@ use core_test_support::test_codex::TestCodexHarness;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event_match;
 use orbit_code_core::CodexThread;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::protocol::EventMsg;
 use orbit_code_protocol::protocol::Op;
 use orbit_code_protocol::protocol::UndoCompletedEvent;

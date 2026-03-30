@@ -19,8 +19,8 @@ use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_codex::test_codex;
-use orbit_code_core::features::Feature;
 use orbit_code_core::sandboxing::SandboxPermissions;
+use orbit_code_features::Feature;
 use orbit_code_protocol::protocol::AskForApproval;
 use orbit_code_protocol::protocol::SandboxPolicy;
 use regex_lite::Regex;
@@ -321,7 +321,7 @@ async fn collect_tools(use_unified_exec: bool) -> Result<Vec<String>> {
 async fn unified_exec_spec_toggle_end_to_end() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let tools_disabled = collect_tools(false).await?;
+    let tools_disabled = collect_tools(/*use_unified_exec*/ false).await?;
     assert!(
         !tools_disabled.iter().any(|name| name == "exec_command"),
         "tools list should not include exec_command when disabled: {tools_disabled:?}"
@@ -331,7 +331,7 @@ async fn unified_exec_spec_toggle_end_to_end() -> Result<()> {
         "tools list should not include write_stdin when disabled: {tools_disabled:?}"
     );
 
-    let tools_enabled = collect_tools(true).await?;
+    let tools_enabled = collect_tools(/*use_unified_exec*/ true).await?;
     assert!(
         tools_enabled.iter().any(|name| name == "exec_command"),
         "tools list should include exec_command when enabled: {tools_enabled:?}"

@@ -185,6 +185,11 @@ impl Respond for CodexAppsJsonRpcResponder {
                             {
                                 "name": "calendar_create_event",
                                 "description": "Create a calendar event.",
+                                "annotations": {
+                                    "readOnlyHint": false,
+                                    "destructiveHint": false,
+                                    "openWorldHint": false
+                                },
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
@@ -199,7 +204,7 @@ impl Respond for CodexAppsJsonRpcResponder {
                                     "connector_id": CONNECTOR_ID,
                                     "connector_name": self.connector_name.clone(),
                                     "connector_description": self.connector_description.clone(),
-                                    "_orbit_code_apps": {
+                                    "_codex_apps": {
                                         "resource_uri": CALENDAR_CREATE_EVENT_RESOURCE_URI,
                                         "contains_mcp_source": true,
                                         "connector_id": CONNECTOR_ID
@@ -209,6 +214,9 @@ impl Respond for CodexAppsJsonRpcResponder {
                             {
                                 "name": "calendar_list_events",
                                 "description": "List calendar events.",
+                                "annotations": {
+                                    "readOnlyHint": true
+                                },
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
@@ -221,7 +229,7 @@ impl Respond for CodexAppsJsonRpcResponder {
                                     "connector_id": CONNECTOR_ID,
                                     "connector_name": self.connector_name.clone(),
                                     "connector_description": self.connector_description.clone(),
-                                    "_orbit_code_apps": {
+                                    "_codex_apps": {
                                         "resource_uri": CALENDAR_LIST_EVENTS_RESOURCE_URI,
                                         "contains_mcp_source": true,
                                         "connector_id": CONNECTOR_ID
@@ -241,6 +249,9 @@ impl Respond for CodexAppsJsonRpcResponder {
                         tools.push(json!({
                             "name": format!("calendar_timezone_option_{index}"),
                             "description": format!("Read timezone option {index}."),
+                            "annotations": {
+                                "readOnlyHint": true
+                            },
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -272,7 +283,7 @@ impl Respond for CodexAppsJsonRpcResponder {
                     .pointer("/params/arguments/starts_at")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
-                let orbit_code_apps_meta = body.pointer("/params/_meta/_orbit_code_apps").cloned();
+                let codex_apps_meta = body.pointer("/params/_meta/_codex_apps").cloned();
 
                 ResponseTemplate::new(200).set_body_json(json!({
                     "jsonrpc": "2.0",
@@ -283,7 +294,7 @@ impl Respond for CodexAppsJsonRpcResponder {
                             "text": format!("called {tool_name} for {title} at {starts_at}")
                         }],
                         "structuredContent": {
-                            "_orbit_code_apps": orbit_code_apps_meta,
+                            "_codex_apps": codex_apps_meta,
                         },
                         "isError": false
                     }

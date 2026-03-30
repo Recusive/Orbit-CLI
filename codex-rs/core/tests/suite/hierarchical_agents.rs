@@ -4,7 +4,7 @@ use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_codex::test_codex;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 
 const HIERARCHICAL_AGENTS_SNIPPET: &str =
     "Files called AGENTS.md commonly appear in many places inside a container";
@@ -23,7 +23,14 @@ async fn hierarchical_agents_appends_to_project_doc_in_user_instructions() {
             .features
             .enable(Feature::ChildAgentsMd)
             .expect("test config should allow feature update");
-        std::fs::write(config.cwd.join("AGENTS.md"), "be nice").expect("write AGENTS.md");
+        std::fs::write(
+            config
+                .cwd
+                .join("AGENTS.md")
+                .expect("absolute AGENTS.md path"),
+            "be nice",
+        )
+        .expect("write AGENTS.md");
     });
     let test = builder.build(&server).await.expect("build test codex");
 

@@ -7,6 +7,7 @@ use crate::config::ToolsToml;
 use crate::config::types::ApprovalsReviewer;
 use crate::config::types::Personality;
 use crate::config::types::WindowsToml;
+use crate::features::FeaturesToml;
 use crate::protocol::AskForApproval;
 use orbit_code_protocol::config_types::ReasoningSummary;
 use orbit_code_protocol::config_types::SandboxMode;
@@ -60,7 +61,7 @@ pub struct ConfigProfile {
     #[serde(default)]
     // Injects known feature keys into the schema and forbids unknown keys.
     #[schemars(schema_with = "crate::config::schema::features_schema")]
-    pub features: Option<crate::features::FeaturesToml>,
+    pub features: Option<FeaturesToml>,
     pub oss_provider: Option<String>,
 }
 

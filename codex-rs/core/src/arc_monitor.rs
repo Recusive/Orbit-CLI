@@ -14,8 +14,8 @@ use orbit_code_protocol::models::MessagePhase;
 use orbit_code_protocol::models::ResponseItem;
 
 const ARC_MONITOR_TIMEOUT: Duration = Duration::from_secs(30);
-const ORBIT_ARC_MONITOR_ENDPOINT_OVERRIDE: &str = "ORBIT_ARC_MONITOR_ENDPOINT_OVERRIDE";
-const ORBIT_ARC_MONITOR_TOKEN: &str = "ORBIT_ARC_MONITOR_TOKEN";
+const CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE: &str = "CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE";
+const CODEX_ARC_MONITOR_TOKEN: &str = "CODEX_ARC_MONITOR_TOKEN";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArcMonitorOutcome {
@@ -62,8 +62,8 @@ struct ArcMonitorPolicies {
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArcMonitorMetadata {
-    orbit_code_thread_id: String,
-    orbit_code_turn_id: String,
+    codex_thread_id: String,
+    codex_turn_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     conversation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,6 +99,7 @@ pub(crate) async fn monitor_action(
     sess: &Session,
     turn_context: &TurnContext,
     action: serde_json::Value,
+    protection_client_callsite: &'static str,
 ) -> ArcMonitorOutcome {
     let auth = match turn_context.auth_manager.as_ref() {
         Some(auth_manager) => match auth_manager.auth().await {
@@ -107,7 +108,7 @@ pub(crate) async fn monitor_action(
         },
         None => None,
     };
-    let token = if let Some(token) = read_non_empty_env_var(ORBIT_ARC_MONITOR_TOKEN) {
+    let token = if let Some(token) = read_non_empty_env_var(CODEX_ARC_MONITOR_TOKEN) {
         token
     } else {
         let Some(auth) = auth.as_ref() else {
@@ -125,7 +126,7 @@ pub(crate) async fn monitor_action(
         }
     };
 
-    let url = read_non_empty_env_var(ORBIT_ARC_MONITOR_ENDPOINT_OVERRIDE).unwrap_or_else(|| {
+    let url = read_non_empty_env_var(CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE).unwrap_or_else(|| {
         format!(
             "{}/codex/safety/arc",
             turn_context.config.chatgpt_base_url.trim_end_matches('/')
@@ -138,7 +139,8 @@ pub(crate) async fn monitor_action(
             return ArcMonitorOutcome::Ok;
         }
     };
-    let body = build_arc_monitor_request(sess, turn_context, action).await;
+    let body =
+        build_arc_monitor_request(sess, turn_context, action, protection_client_callsite).await;
     let client = build_reqwest_client();
     let mut request = client
         .post(&url)
@@ -236,6 +238,7 @@ async fn build_arc_monitor_request(
     sess: &Session,
     turn_context: &TurnContext,
     action: serde_json::Map<String, serde_json::Value>,
+    protection_client_callsite: &'static str,
 ) -> ArcMonitorRequest {
     let history = sess.clone_history().await;
     let mut messages = build_arc_monitor_messages(history.raw_items());
@@ -251,10 +254,10 @@ async fn build_arc_monitor_request(
     let conversation_id = sess.conversation_id.to_string();
     ArcMonitorRequest {
         metadata: ArcMonitorMetadata {
-            orbit_code_thread_id: conversation_id.clone(),
-            orbit_code_turn_id: turn_context.sub_id.clone(),
+            codex_thread_id: conversation_id.clone(),
+            codex_turn_id: turn_context.sub_id.clone(),
             conversation_id: Some(conversation_id),
-            protection_client_callsite: None,
+            protection_client_callsite: Some(protection_client_callsite.to_string()),
         },
         messages: Some(messages),
         input: None,

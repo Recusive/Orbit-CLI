@@ -1,14 +1,14 @@
 use crate::codex::Session;
 use crate::compact::content_items_to_text;
 use crate::event_mapping::is_contextual_user_message_content;
-use crate::git_info::resolve_root_git_project_for_trust;
-use crate::truncate::TruncationPolicy;
-use crate::truncate::truncate_text;
 use chrono::Utc;
 use dirs::home_dir;
+use orbit_code_git_utils::resolve_root_git_project_for_trust;
 use orbit_code_protocol::models::ResponseItem;
 use orbit_code_state::SortKey;
 use orbit_code_state::ThreadMetadata;
+use orbit_code_utils_output_truncation::TruncationPolicy;
+use orbit_code_utils_output_truncation::truncate_text;
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::collections::HashSet;

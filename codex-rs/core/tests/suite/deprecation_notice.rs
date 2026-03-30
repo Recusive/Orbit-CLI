@@ -12,7 +12,7 @@ use orbit_code_core::config_loader::ConfigLayerEntry;
 use orbit_code_core::config_loader::ConfigLayerStack;
 use orbit_code_core::config_loader::ConfigRequirements;
 use orbit_code_core::config_loader::ConfigRequirementsToml;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::protocol::DeprecationNoticeEvent;
 use orbit_code_protocol::protocol::EventMsg;
 use pretty_assertions::assert_eq;

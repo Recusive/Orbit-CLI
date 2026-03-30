@@ -1,6 +1,7 @@
 //! Turn-scoped state and active turn metadata scaffolding.
 
 use indexmap::IndexMap;
+use orbit_code_sandboxing::policy_transforms::merge_permission_profiles;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -19,7 +20,6 @@ use tokio::sync::oneshot;
 use crate::codex::TurnContext;
 use crate::protocol::ReviewDecision;
 use crate::protocol::TokenUsage;
-use crate::sandboxing::merge_permission_profiles;
 use crate::tasks::SessionTask;
 use orbit_code_protocol::models::PermissionProfile;
 

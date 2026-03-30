@@ -4,7 +4,7 @@ use core_test_support::responses;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_codex::test_codex;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::config_types::WebSearchMode;
 use orbit_code_protocol::protocol::SandboxPolicy;
 use pretty_assertions::assert_eq;

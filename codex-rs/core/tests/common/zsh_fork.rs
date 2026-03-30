@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use orbit_code_core::config::Config;
 use orbit_code_core::config::Constrained;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::protocol::AskForApproval;
 use orbit_code_protocol::protocol::SandboxPolicy;
 

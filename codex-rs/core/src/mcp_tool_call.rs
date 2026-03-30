@@ -644,7 +644,7 @@ async fn maybe_monitor_auto_approved_mcp_tool_call(
     metadata: Option<&McpToolApprovalMetadata>,
 ) -> ArcMonitorOutcome {
     let action = prepare_arc_request_action(invocation, metadata);
-    monitor_action(sess, turn_context, action).await
+    monitor_action(sess, turn_context, action, "mcp_tool_call").await
 }
 
 fn prepare_arc_request_action(

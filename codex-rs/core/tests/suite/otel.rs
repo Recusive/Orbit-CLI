@@ -19,7 +19,7 @@ use core_test_support::test_codex::TestCodex;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
 use orbit_code_core::config::Constrained;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::protocol::AskForApproval;
 use orbit_code_protocol::protocol::EventMsg;
 use orbit_code_protocol::protocol::Op;
@@ -973,6 +973,7 @@ async fn handle_response_item_records_tool_result_for_local_shell_call() {
                 .features
                 .disable(Feature::GhostCommit)
                 .expect("test config should allow feature update");
+            config.permissions.approval_policy = Constrained::allow_any(AskForApproval::Never);
         })
         .build(&server)
         .await
@@ -989,7 +990,7 @@ async fn handle_response_item_records_tool_result_for_local_shell_call() {
         .await
         .unwrap();
 
-    wait_for_event(&codex, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
+    wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     logs_assert(|lines: &[&str]| {
         let line = lines

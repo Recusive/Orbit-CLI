@@ -10,7 +10,7 @@ use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
-use orbit_code_core::features::Feature;
+use orbit_code_features::Feature;
 use orbit_code_protocol::config_types::CollaborationMode;
 use orbit_code_protocol::config_types::ModeKind;
 use orbit_code_protocol::config_types::Settings;
@@ -51,6 +51,7 @@ async fn submit_user_turn(
             final_output_json_schema: None,
             cwd: test.cwd_path().to_path_buf(),
             approval_policy,
+            approvals_reviewer: None,
             sandbox_policy,
             model: session_model,
             effort: None,
@@ -81,7 +82,7 @@ async fn execpolicy_blocks_shell_invocation() -> Result<()> {
     }
 
     let mut builder = test_codex().with_config(|config| {
-        let policy_path = config.orbit_code_home.join("rules").join("policy.rules");
+        let policy_path = config.codex_home.join("rules").join("policy.rules");
         fs::create_dir_all(
             policy_path
                 .parent()
@@ -131,6 +132,7 @@ async fn execpolicy_blocks_shell_invocation() -> Result<()> {
             final_output_json_schema: None,
             cwd: test.cwd_path().to_path_buf(),
             approval_policy: AskForApproval::Never,
+            approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
             model: session_model,
             effort: None,

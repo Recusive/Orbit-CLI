@@ -42,6 +42,7 @@ async fn run_turn(test: &TestCodex, prompt: &str) -> anyhow::Result<()> {
             final_output_json_schema: None,
             cwd: test.cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
+            approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
             model: session_model,
             effort: None,
@@ -64,9 +65,7 @@ async fn run_turn_and_measure(test: &TestCodex, prompt: &str) -> anyhow::Result<
 }
 
 #[allow(clippy::expect_used)]
-async fn build_orbit_code_with_test_tool(
-    server: &wiremock::MockServer,
-) -> anyhow::Result<TestCodex> {
+async fn build_codex_with_test_tool(server: &wiremock::MockServer) -> anyhow::Result<TestCodex> {
     let mut builder = test_codex().with_model("test-gpt-5.1-codex");
     builder.build(server).await
 }
@@ -84,7 +83,7 @@ async fn read_file_tools_run_in_parallel() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let test = build_orbit_code_with_test_tool(&server).await?;
+    let test = build_codex_with_test_tool(&server).await?;
 
     let warmup_args = json!({
         "sleep_after_ms": 10,
@@ -181,7 +180,7 @@ async fn mixed_parallel_tools_run_in_parallel() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let test = build_orbit_code_with_test_tool(&server).await?;
+    let test = build_codex_with_test_tool(&server).await?;
 
     let sync_args = json!({
         "sleep_after_ms": 300
@@ -217,7 +216,7 @@ async fn tool_results_grouped() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let test = build_orbit_code_with_test_tool(&server).await?;
+    let test = build_codex_with_test_tool(&server).await?;
 
     let shell_args = serde_json::to_string(&json!({
         "command": "echo 'shell output'",
@@ -360,6 +359,7 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
             final_output_json_schema: None,
             cwd: test.cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
+            approvals_reviewer: None,
             sandbox_policy: SandboxPolicy::DangerFullAccess,
             model: session_model,
             effort: None,
