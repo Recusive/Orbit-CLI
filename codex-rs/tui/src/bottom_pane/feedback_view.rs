@@ -32,7 +32,7 @@ use super::textarea::TextAreaState;
 const BASE_CLI_BUG_ISSUE_URL: &str =
     "https://github.com/openai/codex/issues/new?template=3-cli.yml";
 /// Internal routing link for employee feedback follow-ups. This must not be shown to external users.
-const ORBIT_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
+const CODEX_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
 
 /// The target audience for feedback follow-up instructions.
 ///
@@ -419,7 +419,7 @@ fn issue_url_for_category(
 /// We accept a `thread_id` so the call site stays symmetric with the external
 /// path, but we currently point to a fixed channel without prefilling text.
 fn slack_feedback_url(_thread_id: &str) -> String {
-    ORBIT_FEEDBACK_INTERNAL_URL.to_string()
+    CODEX_FEEDBACK_INTERNAL_URL.to_string()
 }
 
 // Build the selection popup params for feedback categories.
@@ -628,13 +628,13 @@ mod tests {
     fn make_view(category: FeedbackCategory) -> FeedbackNoteView {
         let (tx_raw, _rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
         let tx = AppEventSender::new(tx_raw);
-        let snapshot = orbit_code_feedback::CodexFeedback::new().snapshot(None);
+        let snapshot = orbit_code_feedback::CodexFeedback::new().snapshot(/*session_id*/ None);
         FeedbackNoteView::new(
             category,
             snapshot,
-            None,
+            /*rollout_path*/ None,
             tx,
-            true,
+            /*include_logs*/ true,
             FeedbackAudience::External,
         )
     }
@@ -642,35 +642,35 @@ mod tests {
     #[test]
     fn feedback_view_bad_result() {
         let view = make_view(FeedbackCategory::BadResult);
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
         insta::assert_snapshot!("feedback_view_bad_result", rendered);
     }
 
     #[test]
     fn feedback_view_good_result() {
         let view = make_view(FeedbackCategory::GoodResult);
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
         insta::assert_snapshot!("feedback_view_good_result", rendered);
     }
 
     #[test]
     fn feedback_view_bug() {
         let view = make_view(FeedbackCategory::Bug);
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
         insta::assert_snapshot!("feedback_view_bug", rendered);
     }
 
     #[test]
     fn feedback_view_other() {
         let view = make_view(FeedbackCategory::Other);
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
         insta::assert_snapshot!("feedback_view_other", rendered);
     }
 
     #[test]
     fn feedback_view_safety_check() {
         let view = make_view(FeedbackCategory::SafetyCheck);
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
         insta::assert_snapshot!("feedback_view_safety_check", rendered);
     }
 
@@ -690,17 +690,17 @@ mod tests {
             },
         ]);
         let snapshot = orbit_code_feedback::CodexFeedback::new()
-            .snapshot(None)
+            .snapshot(/*session_id*/ None)
             .with_feedback_diagnostics(diagnostics);
         let view = FeedbackNoteView::new(
             FeedbackCategory::Bug,
             snapshot,
-            None,
+            /*rollout_path*/ None,
             tx,
-            false,
+            /*include_logs*/ false,
             FeedbackAudience::External,
         );
-        let rendered = render(&view, 60);
+        let rendered = render(&view, /*width*/ 60);
 
         insta::assert_snapshot!("feedback_view_with_connectivity_diagnostics", rendered);
     }

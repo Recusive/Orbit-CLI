@@ -1,7 +1,7 @@
-load("//:defs.bzl", "orbit_code_rust_crate")
+load("//:defs.bzl", "codex_rust_crate")
 
-orbit_code_rust_crate(
-    name = "tui_app_server",
+codex_rust_crate(
+    name = "tui",
     crate_name = "orbit_code_tui_app_server",
     compile_data = glob(
         include = ["**"],
@@ -12,12 +12,12 @@ orbit_code_rust_crate(
         ],
         allow_empty = True,
     ) + [
-        "//orbit-code-rs/core:templates/collaboration_mode/default.md",
-        "//orbit-code-rs/core:templates/collaboration_mode/plan.md",
+        "//codex-rs/core:templates/collaboration_mode/default.md",
+        "//codex-rs/core:templates/collaboration_mode/plan.md",
     ],
-    test_data_extra = glob(["src/**/snapshots/**"]) + ["//orbit-code-rs/core:model_availability_nux_fixtures"],
+    test_data_extra = glob(["src/**/snapshots/**"]) + ["//codex-rs/core:model_availability_nux_fixtures"],
     integration_compile_data_extra = ["src/test_backend.rs"],
     extra_binaries = [
-        "//orbit-code-rs/cli:codex",
+        "//codex-rs/cli:codex",
     ],
 )

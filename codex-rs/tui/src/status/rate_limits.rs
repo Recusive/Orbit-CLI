@@ -86,7 +86,7 @@ impl RateLimitWindowDisplay {
 
 #[derive(Debug, Clone)]
 pub(crate) struct RateLimitSnapshotDisplay {
-    /// Canonical limit identifier (for example: `codex` or `orbit_code_other`).
+    /// Canonical limit identifier (for example: `codex` or `codex_other`).
     pub limit_name: String,
     /// Local timestamp representing when this display snapshot was captured.
     pub captured_at: DateTime<Local>,
@@ -204,9 +204,9 @@ pub(crate) fn compose_rate_limit_data_many(
             .map(|label| capitalize_first(&label));
         let window_count =
             usize::from(snapshot.primary.is_some()) + usize::from(snapshot.secondary.is_some());
-        let combine_non_orbit_code_single_limit = show_limit_prefix && window_count == 1;
+        let combine_non_codex_single_limit = show_limit_prefix && window_count == 1;
 
-        if show_limit_prefix && !combine_non_orbit_code_single_limit {
+        if show_limit_prefix && !combine_non_codex_single_limit {
             rows.push(StatusRateLimitRow {
                 label: format!("{limit_bucket_label} limit"),
                 value: StatusRateLimitValue::Text(String::new()),
@@ -214,7 +214,7 @@ pub(crate) fn compose_rate_limit_data_many(
         }
 
         if let Some(primary) = snapshot.primary.as_ref() {
-            let label = if combine_non_orbit_code_single_limit {
+            let label = if combine_non_codex_single_limit {
                 format!(
                     "{} {} limit",
                     limit_bucket_label,
@@ -236,7 +236,7 @@ pub(crate) fn compose_rate_limit_data_many(
         }
 
         if let Some(secondary) = snapshot.secondary.as_ref() {
-            let label = if combine_non_orbit_code_single_limit {
+            let label = if combine_non_codex_single_limit {
                 format!(
                     "{} {} limit",
                     limit_bucket_label,
@@ -361,12 +361,12 @@ mod tests {
     }
 
     #[test]
-    fn non_orbit_code_single_limit_renders_combined_row() {
+    fn non_codex_single_limit_renders_combined_row() {
         let now = Local::now();
         let codex = RateLimitSnapshotDisplay {
             limit_name: "codex".to_string(),
             captured_at: now,
-            primary: Some(window(10.0)),
+            primary: Some(window(/*used_percent*/ 10.0)),
             secondary: None,
             credits: Some(CreditsSnapshotDisplay {
                 has_credits: true,
@@ -377,7 +377,7 @@ mod tests {
         let other = RateLimitSnapshotDisplay {
             limit_name: "codex-other".to_string(),
             captured_at: now,
-            primary: Some(window(20.0)),
+            primary: Some(window(/*used_percent*/ 20.0)),
             secondary: None,
             credits: Some(CreditsSnapshotDisplay {
                 has_credits: true,
@@ -405,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn non_orbit_code_multi_limit_keeps_group_row() {
+    fn non_codex_multi_limit_keeps_group_row() {
         let now = Local::now();
         let other = RateLimitSnapshotDisplay {
             limit_name: "codex-other".to_string(),
