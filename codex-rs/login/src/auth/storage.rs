@@ -322,7 +322,7 @@ pub(super) fn delete_file_if_exists(orbit_code_home: &Path) -> std::io::Result<b
     }
 }
 
-pub(crate) trait AuthStorageBackend: Debug + Send + Sync {
+pub trait AuthStorageBackend: Debug + Send + Sync {
     fn load(&self) -> std::io::Result<Option<AuthDotJsonV2>>;
     fn save(&self, auth: &AuthDotJsonV2) -> std::io::Result<()>;
     fn delete(&self) -> std::io::Result<bool>;
@@ -614,7 +614,7 @@ impl AuthStorageBackend for EphemeralAuthStorage {
     }
 }
 
-pub(crate) fn create_auth_storage(
+pub fn create_auth_storage(
     orbit_code_home: PathBuf,
     mode: AuthCredentialsStoreMode,
 ) -> Arc<dyn AuthStorageBackend> {

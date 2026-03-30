@@ -16,12 +16,12 @@ use crate::build_implicit_skill_path_indexes;
 use crate::config_rules::SkillConfigRules;
 use crate::config_rules::resolve_disabled_skill_paths;
 use crate::config_rules::skill_config_rules_from_stack;
+use crate::config_types::SkillsConfig;
 use crate::loader::SkillRoot;
 use crate::loader::load_skills_from_roots;
 use crate::loader::skill_roots;
 use crate::system::install_system_skills;
 use crate::system::uninstall_system_skills;
-use orbit_code_core::config::types::SkillsConfig;
 
 #[derive(Debug, Clone)]
 pub struct SkillsLoadInput {

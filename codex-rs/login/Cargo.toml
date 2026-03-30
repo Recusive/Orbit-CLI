@@ -12,9 +12,11 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 orbit-code-app-server-protocol = { workspace = true }
+orbit-code-anthropic = { workspace = true }
 orbit-code-client = { workspace = true }
 orbit-code-config = { workspace = true }
 orbit-code-keyring-store = { workspace = true }
+orbit-code-otel = { workspace = true }
 orbit-code-protocol = { workspace = true }
 orbit-code-terminal-detection = { workspace = true }
 orbit-code-utils-template = { workspace = true }
@@ -39,7 +41,6 @@ tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
 webbrowser = { workspace = true }
-orbit-code-core = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

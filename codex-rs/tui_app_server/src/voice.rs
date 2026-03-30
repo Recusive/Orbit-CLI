@@ -12,7 +12,7 @@ use orbit_code_core::auth::AuthCredentialsStoreMode;
 use orbit_code_core::config::Config;
 use orbit_code_core::config::find_orbit_code_home;
 use orbit_code_core::default_client::get_orbit_code_user_agent;
-use orbit_code_login::AuthMode;
+use orbit_code_login::ApiAuthMode as AuthMode;
 use orbit_code_login::CodexAuth;
 use orbit_code_protocol::protocol::ConversationAudioParams;
 use orbit_code_protocol::protocol::RealtimeAudioFrame;

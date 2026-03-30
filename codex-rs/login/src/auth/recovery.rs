@@ -11,10 +11,10 @@ use crate::auth::CodexAuth;
 use crate::auth::ExternalAuthRefreshReason;
 use crate::auth::REFRESH_TOKEN_ACCOUNT_MISMATCH_MESSAGE;
 use crate::auth::RefreshTokenError;
+use crate::auth::error::RefreshTokenFailedError;
+use crate::auth::error::RefreshTokenFailedReason;
 use crate::auth::manager::AuthManager;
 use crate::auth::manager::ReloadOutcome;
-use crate::error::RefreshTokenFailedError;
-use crate::error::RefreshTokenFailedReason;
 
 pub(super) enum UnauthorizedRecoveryStep {
     Reload,

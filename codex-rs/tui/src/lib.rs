@@ -15,6 +15,7 @@ use orbit_code_core::CodexAuth;
 use orbit_code_core::INTERACTIVE_SESSION_SOURCES;
 use orbit_code_core::RolloutRecorder;
 use orbit_code_core::ThreadSortKey;
+use orbit_code_core::auth::AuthConfig;
 use orbit_code_core::auth::AuthMode;
 use orbit_code_core::auth::enforce_login_restrictions;
 use orbit_code_core::check_execpolicy_for_warnings;
@@ -441,7 +442,13 @@ pub async fn run_main(
     }
 
     #[allow(clippy::print_stderr)]
-    if let Err(err) = enforce_login_restrictions(&config) {
+    let auth_config = AuthConfig {
+        orbit_code_home: config.orbit_code_home.clone(),
+        auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
+        forced_login_method: config.forced_login_method,
+        forced_chatgpt_workspace_id: config.forced_chatgpt_workspace_id.clone(),
+    };
+    if let Err(err) = enforce_login_restrictions(&auth_config) {
         eprintln!("{err}");
         std::process::exit(1);
     }

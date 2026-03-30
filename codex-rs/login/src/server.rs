@@ -23,18 +23,15 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::AuthCredentialsStoreMode;
+use crate::AuthDotJson;
 use crate::pkce::PkceCodes;
 use crate::pkce::generate_pkce;
+use crate::save_auth;
 use base64::Engine;
 use chrono::Utc;
 use orbit_code_app_server_protocol::AuthMode;
 use orbit_code_client::build_reqwest_client_with_custom_ca;
-use orbit_code_core::auth::AuthCredentialsStoreMode;
-use orbit_code_core::auth::AuthDotJson;
-use orbit_code_core::auth::save_auth;
-use orbit_code_core::default_client::originator;
-use orbit_code_core::token_data::TokenData;
-use orbit_code_core::token_data::parse_chatgpt_jwt_claims;
 use rand::RngCore;
 use serde_json::Value as JsonValue;
 use tiny_http::Header;
@@ -45,6 +42,10 @@ use tiny_http::StatusCode;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+use crate::default_client::originator;
+use crate::token_data::TokenData;
+use crate::token_data::parse_chatgpt_jwt_claims;
 
 const DEFAULT_ISSUER: &str = "https://auth.openai.com";
 const DEFAULT_PORT: u16 = 1455;

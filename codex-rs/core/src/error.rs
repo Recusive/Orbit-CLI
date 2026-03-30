@@ -9,6 +9,8 @@ use chrono::Datelike;
 use chrono::Local;
 use chrono::Utc;
 use orbit_code_async_utils::CancelErr;
+pub use orbit_code_login::RefreshTokenFailedError;
+pub use orbit_code_login::RefreshTokenFailedReason;
 use orbit_code_protocol::ThreadId;
 use orbit_code_protocol::protocol::CodexErrorInfo;
 use orbit_code_protocol::protocol::ErrorEvent;
@@ -259,30 +261,6 @@ impl std::fmt::Display for ResponseStreamFailed {
                 .unwrap_or_default()
         )
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-#[error("{message}")]
-pub struct RefreshTokenFailedError {
-    pub reason: RefreshTokenFailedReason,
-    pub message: String,
-}
-
-impl RefreshTokenFailedError {
-    pub fn new(reason: RefreshTokenFailedReason, message: impl Into<String>) -> Self {
-        Self {
-            reason,
-            message: message.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RefreshTokenFailedReason {
-    Expired,
-    Exhausted,
-    Revoked,
-    Other,
 }
 
 #[derive(Debug)]

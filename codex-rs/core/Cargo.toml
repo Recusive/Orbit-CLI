@@ -45,6 +45,7 @@ orbit-code-git-utils = { workspace = true }
 orbit-code-hooks = { workspace = true }
 orbit-code-instructions = { workspace = true }
 orbit-code-keyring-store = { workspace = true }
+orbit-code-login = { workspace = true }
 orbit-code-network-proxy = { workspace = true }
 orbit-code-otel = { workspace = true }
 orbit-code-artifacts = { workspace = true }

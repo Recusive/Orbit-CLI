@@ -11,7 +11,7 @@ use super::normalize_path_for_skill_id;
 use super::orbit_code_app_metadata;
 use super::orbit_code_plugin_metadata;
 use super::orbit_code_plugin_used_metadata;
-use orbit_code_core::default_client::originator;
+use orbit_code_login::default_client::originator;
 use orbit_code_plugin::AppConnectorId;
 use orbit_code_plugin::PluginCapabilitySummary;
 use orbit_code_plugin::PluginId;

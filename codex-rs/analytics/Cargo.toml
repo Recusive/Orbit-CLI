@@ -13,7 +13,6 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
-orbit-code-core = { workspace = true }
 orbit-code-git-utils = { workspace = true }
 orbit-code-login = { workspace = true }
 orbit-code-plugin = { workspace = true }

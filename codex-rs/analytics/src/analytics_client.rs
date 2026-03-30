@@ -1,8 +1,8 @@
-use orbit_code_core::default_client::create_client;
-use orbit_code_core::default_client::originator;
 use orbit_code_git_utils::collect_git_info;
 use orbit_code_git_utils::get_git_repo_root;
 use orbit_code_login::AuthManager;
+use orbit_code_login::default_client::create_client;
+use orbit_code_login::default_client::originator;
 use orbit_code_plugin::PluginTelemetryMetadata;
 use orbit_code_protocol::protocol::SkillScope;
 use serde::Serialize;

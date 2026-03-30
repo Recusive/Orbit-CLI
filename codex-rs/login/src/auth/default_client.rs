@@ -1,9 +1,8 @@
-use crate::config_loader::ResidencyRequirement;
-use crate::spawn::CODEX_SANDBOX_ENV_VAR;
 use orbit_code_client::BuildCustomCaTransportError;
 use orbit_code_client::CodexHttpClient;
 pub use orbit_code_client::CodexRequestBuilder;
 use orbit_code_client::build_reqwest_client_with_custom_ca;
+pub use orbit_code_config::ResidencyRequirement;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use std::sync::LazyLock;
@@ -131,7 +130,7 @@ pub fn get_orbit_code_user_agent() -> String {
         os_info.os_type(),
         os_info.version(),
         os_info.architecture().unwrap_or("unknown"),
-        crate::terminal::user_agent()
+        orbit_code_terminal_detection::user_agent()
     );
     let suffix = USER_AGENT_SUFFIX
         .lock()
@@ -233,7 +232,7 @@ pub fn default_headers() -> HeaderMap {
 }
 
 fn is_sandboxed() -> bool {
-    std::env::var(CODEX_SANDBOX_ENV_VAR).as_deref() == Ok("seatbelt")
+    std::env::var("CODEX_SANDBOX").as_deref() == Ok("seatbelt")
 }
 
 #[cfg(test)]

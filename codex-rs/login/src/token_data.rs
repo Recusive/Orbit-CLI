@@ -55,7 +55,7 @@ impl IdTokenInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum PlanType {
+pub enum PlanType {
     Known(KnownPlan),
     Unknown(String),
 }
@@ -78,7 +78,7 @@ impl PlanType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum KnownPlan {
+pub enum KnownPlan {
     Free,
     Go,
     Plus,

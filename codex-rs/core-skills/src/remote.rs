@@ -6,8 +6,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use orbit_code_core::default_client::build_reqwest_client;
 use orbit_code_login::CodexAuth;
+use orbit_code_login::default_client::build_reqwest_client;
 
 const REMOTE_SKILLS_API_TIMEOUT: Duration = Duration::from_secs(30);
 

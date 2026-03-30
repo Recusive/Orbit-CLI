@@ -2,12 +2,11 @@ use super::*;
 use crate::token_data::IdTokenInfo;
 use anyhow::Context;
 use base64::Engine;
+use keyring::Error as KeyringError;
+use orbit_code_keyring_store::tests::MockKeyringStore;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use tempfile::tempdir;
-
-use keyring::Error as KeyringError;
-use orbit_code_keyring_store::tests::MockKeyringStore;
 
 /// Helper: build a v2 auth with an OpenAI API key.
 fn v2_api_key(key: &str) -> AuthDotJsonV2 {

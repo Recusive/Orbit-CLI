@@ -17,7 +17,6 @@ anyhow = { workspace = true }
 orbit-code-analytics = { workspace = true }
 orbit-code-app-server-protocol = { workspace = true }
 orbit-code-config = { workspace = true }
-orbit-code-core = { workspace = true }
 orbit-code-instructions = { workspace = true }
 orbit-code-login = { workspace = true }
 orbit-code-otel = { workspace = true }

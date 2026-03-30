@@ -7,10 +7,13 @@
 //! ([`recovery`]), the central [`AuthManager`](manager::AuthManager), and
 //! credential storage backends ([`storage`]).
 
+pub mod default_client;
+mod error;
 pub(crate) mod manager;
 pub(crate) mod persistence;
 mod recovery;
 mod storage;
+mod util;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -23,8 +26,6 @@ use std::sync::Mutex;
 use orbit_code_app_server_protocol::AuthMode as ApiAuthMode;
 use orbit_code_otel::TelemetryAuthMode;
 
-use crate::error::RefreshTokenFailedError;
-use crate::error::RefreshTokenFailedReason;
 use crate::token_data::KnownPlan as InternalKnownPlan;
 use crate::token_data::PlanType as InternalPlanType;
 use crate::token_data::TokenData;
@@ -37,12 +38,13 @@ use thiserror::Error;
 pub use crate::auth::storage::AuthCredentialsStoreMode;
 pub use crate::auth::storage::AuthDotJson;
 pub use crate::auth::storage::AuthDotJsonV2;
-pub(crate) use crate::auth::storage::AuthStorageBackend;
+pub use crate::auth::storage::AuthStorageBackend;
 pub use crate::auth::storage::ProviderAuth;
 pub use crate::auth::storage::ProviderName;
-pub(crate) use crate::auth::storage::create_auth_storage;
+pub use crate::auth::storage::create_auth_storage;
 
 // ── Re-exports from persistence ──────────────────────────────────────
+pub use persistence::AuthConfig;
 pub use persistence::enforce_login_restrictions;
 pub use persistence::load_auth_dot_json;
 pub use persistence::load_auth_dot_json_v2;
@@ -71,12 +73,54 @@ use serial_test::serial;
 pub use manager::AuthManager;
 
 // ── Re-exports from recovery ────────────────────────────────────────
+pub use error::RefreshTokenFailedError;
+pub use error::RefreshTokenFailedReason;
 pub use recovery::UnauthorizedRecovery;
 pub use recovery::UnauthorizedRecoveryStepResult;
 
-// ── Re-exports from anthropic_auth ──────────────────────────────────
-pub use crate::anthropic_auth::AnthropicApiKeyAuth;
-pub use crate::anthropic_auth::AnthropicOAuthAuth;
+// ── Anthropic auth types ────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct AnthropicApiKeyAuth {
+    api_key: String,
+}
+
+impl AnthropicApiKeyAuth {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+
+    pub fn api_key(&self) -> &str {
+        &self.api_key
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AnthropicOAuthAuth {
+    access_token: String,
+    refresh_token: String,
+    /// Unix timestamp in seconds when access_token expires.
+    expires_at: i64,
+}
+
+impl AnthropicOAuthAuth {
+    pub fn access_token(&self) -> &str {
+        &self.access_token
+    }
+
+    pub fn refresh_token(&self) -> &str {
+        &self.refresh_token
+    }
+
+    /// Returns true if the access token will expire within the given buffer (seconds).
+    pub fn is_expiring_within(&self, buffer_seconds: i64) -> bool {
+        let now = chrono::Utc::now().timestamp();
+        self.expires_at.saturating_sub(now) < buffer_seconds
+    }
+}
+
+/// Buffer in seconds before expiry to trigger proactive refresh.
+const ANTHROPIC_TOKEN_REFRESH_BUFFER_SECONDS: i64 = 300; // 5 minutes
 
 // ── AuthMode ────────────────────────────────────────────────────────
 

@@ -3,9 +3,9 @@
 use anyhow::Context;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use orbit_code_core::auth::AuthCredentialsStoreMode;
-use orbit_code_core::auth::load_auth_dot_json;
+use orbit_code_login::AuthCredentialsStoreMode;
 use orbit_code_login::ServerOptions;
+use orbit_code_login::load_auth_dot_json;
 use orbit_code_login::run_device_code_login;
 use serde_json::json;
 use std::sync::Arc;

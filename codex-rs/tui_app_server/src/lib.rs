@@ -24,6 +24,7 @@ use orbit_code_app_server_protocol::Thread as AppServerThread;
 use orbit_code_app_server_protocol::ThreadListParams;
 use orbit_code_app_server_protocol::ThreadSortKey as AppServerThreadSortKey;
 use orbit_code_app_server_protocol::ThreadSourceKind;
+use orbit_code_core::auth::AuthConfig;
 use orbit_code_core::auth::enforce_login_restrictions;
 use orbit_code_core::check_execpolicy_for_warnings;
 use orbit_code_core::config::Config;
@@ -768,7 +769,13 @@ pub async fn run_main(
 
     if matches!(app_server_target, AppServerTarget::Embedded) {
         #[allow(clippy::print_stderr)]
-        if let Err(err) = enforce_login_restrictions(&config) {
+        let auth_config = AuthConfig {
+            orbit_code_home: config.orbit_code_home.clone(),
+            auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
+            forced_login_method: config.forced_login_method,
+            forced_chatgpt_workspace_id: config.forced_chatgpt_workspace_id.clone(),
+        };
+        if let Err(err) = enforce_login_restrictions(&auth_config) {
             eprintln!("{err}");
             std::process::exit(1);
         }

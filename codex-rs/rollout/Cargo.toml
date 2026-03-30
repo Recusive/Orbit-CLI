@@ -16,7 +16,6 @@ workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-orbit-code-core = { workspace = true }
 orbit-code-file-search = { workspace = true }
 orbit-code-git-utils = { workspace = true }
 orbit-code-login = { workspace = true }

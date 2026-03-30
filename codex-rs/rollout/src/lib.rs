@@ -13,7 +13,7 @@ pub mod session_index;
 pub mod state_db;
 
 pub(crate) mod default_client {
-    pub use orbit_code_core::default_client::*;
+    pub use orbit_code_login::default_client::*;
 }
 
 pub(crate) use orbit_code_protocol::protocol;

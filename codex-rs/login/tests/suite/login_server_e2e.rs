@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::Result;
 use base64::Engine;
 use core_test_support::skip_if_no_network;
-use orbit_code_core::auth::AuthCredentialsStoreMode;
+use orbit_code_login::AuthCredentialsStoreMode;
 use orbit_code_login::ServerOptions;
 use orbit_code_login::run_login_server;
 use tempfile::tempdir;

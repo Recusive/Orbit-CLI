@@ -1,8 +1,6 @@
 use super::*;
 use crate::auth::storage::FileAuthStorage;
 use crate::auth::storage::get_auth_file;
-use crate::config::Config;
-use crate::config::ConfigBuilder;
 use crate::token_data::IdTokenInfo;
 use crate::token_data::KnownPlan as InternalKnownPlan;
 use crate::token_data::PlanType as InternalPlanType;
@@ -264,19 +262,17 @@ fn write_auth_file(params: AuthFileParams, orbit_code_home: &Path) -> std::io::R
     Ok(fake_jwt)
 }
 
-async fn build_config(
+fn build_config(
     orbit_code_home: &Path,
     forced_login_method: Option<ForcedLoginMethod>,
     forced_chatgpt_workspace_id: Option<String>,
-) -> Config {
-    let mut config = ConfigBuilder::default()
-        .orbit_code_home(orbit_code_home.to_path_buf())
-        .build()
-        .await
-        .expect("config should load");
-    config.forced_login_method = forced_login_method;
-    config.forced_chatgpt_workspace_id = forced_chatgpt_workspace_id;
-    config
+) -> AuthConfig {
+    AuthConfig {
+        orbit_code_home: orbit_code_home.to_path_buf(),
+        auth_credentials_store_mode: AuthCredentialsStoreMode::File,
+        forced_login_method,
+        forced_chatgpt_workspace_id,
+    }
 }
 
 /// Use sparingly.
@@ -324,8 +320,7 @@ async fn enforce_login_restrictions_logs_out_for_method_mismatch() {
         orbit_code_home.path(),
         Some(ForcedLoginMethod::Chatgpt),
         None,
-    )
-    .await;
+    );
 
     let err =
         super::enforce_login_restrictions(&config).expect_err("expected method mismatch to error");
@@ -350,7 +345,7 @@ async fn enforce_login_restrictions_logs_out_for_workspace_mismatch() {
     )
     .expect("failed to write auth file");
 
-    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string())).await;
+    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string()));
 
     let err = super::enforce_login_restrictions(&config)
         .expect_err("expected workspace mismatch to error");
@@ -375,7 +370,7 @@ async fn enforce_login_restrictions_allows_matching_workspace() {
     )
     .expect("failed to write auth file");
 
-    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string())).await;
+    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string()));
 
     super::enforce_login_restrictions(&config).expect("matching workspace should succeed");
     assert!(
@@ -395,7 +390,7 @@ async fn enforce_login_restrictions_allows_api_key_if_login_method_not_set_but_f
     )
     .expect("seed api key");
 
-    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string())).await;
+    let config = build_config(orbit_code_home.path(), None, Some("org_mine".to_string()));
 
     super::enforce_login_restrictions(&config).expect("matching workspace should succeed");
     assert!(
@@ -414,8 +409,7 @@ async fn enforce_login_restrictions_blocks_env_api_key_when_chatgpt_required() {
         orbit_code_home.path(),
         Some(ForcedLoginMethod::Chatgpt),
         None,
-    )
-    .await;
+    );
 
     let err = super::enforce_login_restrictions(&config)
         .expect_err("environment API key should not satisfy forced ChatGPT login");

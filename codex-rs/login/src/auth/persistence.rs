@@ -6,13 +6,14 @@
 //! for storage I/O.
 
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
 use orbit_code_app_server_protocol::AuthMode as ApiAuthMode;
 use orbit_code_protocol::config_types::ForcedLoginMethod;
 
-use crate::anthropic_auth::AnthropicApiKeyAuth;
+use crate::auth::AnthropicApiKeyAuth;
 use crate::auth::AuthMode;
 use crate::auth::CodexAuth;
 use crate::auth::storage::AuthCredentialsStoreMode;
@@ -22,9 +23,16 @@ use crate::auth::storage::AuthStorageBackend;
 use crate::auth::storage::ProviderAuth;
 use crate::auth::storage::ProviderName;
 use crate::auth::storage::create_auth_storage;
-use crate::config::Config;
 use crate::token_data::TokenData;
 use crate::token_data::parse_chatgpt_jwt_claims;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthConfig {
+    pub orbit_code_home: PathBuf,
+    pub auth_credentials_store_mode: AuthCredentialsStoreMode,
+    pub forced_login_method: Option<ForcedLoginMethod>,
+    pub forced_chatgpt_workspace_id: Option<String>,
+}
 
 /// Delete the auth.json file inside `orbit_code_home` if it exists. Returns `Ok(true)`
 /// if a file was removed, `Ok(false)` if no auth file was present.
@@ -165,11 +173,11 @@ pub fn load_auth_dot_json_v2(
     storage.load()
 }
 
-pub fn enforce_login_restrictions(config: &Config) -> std::io::Result<()> {
+pub fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<()> {
     let Some(auth) = load_auth(
         &config.orbit_code_home,
         /*enable_orbit_code_api_key_env*/ true,
-        config.cli_auth_credentials_store_mode,
+        config.auth_credentials_store_mode,
     )?
     else {
         return Ok(());
@@ -195,7 +203,7 @@ pub fn enforce_login_restrictions(config: &Config) -> std::io::Result<()> {
             return logout_with_message(
                 &config.orbit_code_home,
                 message,
-                config.cli_auth_credentials_store_mode,
+                config.auth_credentials_store_mode,
             );
         }
     }
@@ -213,7 +221,7 @@ pub fn enforce_login_restrictions(config: &Config) -> std::io::Result<()> {
                     format!(
                         "Failed to load ChatGPT credentials while enforcing workspace restrictions: {err}. Logging out."
                     ),
-                    config.cli_auth_credentials_store_mode,
+                    config.auth_credentials_store_mode,
                 );
             }
         };
@@ -232,7 +240,7 @@ pub fn enforce_login_restrictions(config: &Config) -> std::io::Result<()> {
             return logout_with_message(
                 &config.orbit_code_home,
                 message,
-                config.cli_auth_credentials_store_mode,
+                config.auth_credentials_store_mode,
             );
         }
     }
@@ -391,13 +399,11 @@ pub(crate) fn codex_auth_from_provider_auth(provider_auth: &ProviderAuth) -> Opt
             access_token,
             refresh_token,
             expires_at,
-        } => Some(CodexAuth::AnthropicOAuth(
-            crate::anthropic_auth::AnthropicOAuthAuth {
-                access_token: access_token.clone(),
-                refresh_token: refresh_token.clone(),
-                expires_at: *expires_at,
-            },
-        )),
+        } => Some(CodexAuth::AnthropicOAuth(crate::auth::AnthropicOAuthAuth {
+            access_token: access_token.clone(),
+            refresh_token: refresh_token.clone(),
+            expires_at: *expires_at,
+        })),
         // OpenAI variants are handled by the existing load_auth() path
         ProviderAuth::OpenAiApiKey { .. }
         | ProviderAuth::Chatgpt { .. }

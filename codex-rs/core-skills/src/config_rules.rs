@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use orbit_code_app_server_protocol::ConfigLayerSource;
 use orbit_code_config::ConfigLayerStack;
 use orbit_code_config::ConfigLayerStackOrdering;
-use orbit_code_core::config::types::SkillConfig;
-use orbit_code_core::config::types::SkillsConfig;
 use tracing::warn;
 
 use crate::SkillMetadata;
+use crate::config_types::SkillConfig;
+use crate::config_types::SkillsConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SkillConfigRuleSelector {
